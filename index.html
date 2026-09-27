@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Zitat-Werkstatt</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.0.5/dist/tesseract.min.js"></script>
+<style>
+:root {
+  --paper: #faf8f3; --paper-raised: #ffffff; --ink: #201f1c; --ink-soft: #56514a;
+  --line: #ddd6c8; --oxblood: #7a2e24; --oxblood-soft: #a8493a; --ok: #3c5a43;
+  font-family: "IBM Plex Sans", system-ui, sans-serif; box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #1c1a17; --paper-raised: #26221d; --ink: #ece7dd;
+    --ink-soft: #b3ac9f; --line: #3a352c; --oxblood: #d97a68; --oxblood-soft: #e39584;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #1c1a17; --paper-raised: #26221d; --ink: #ece7dd;
+  --ink-soft: #b3ac9f; --line: #3a352c; --oxblood: #d97a68; --oxblood-soft: #e39584;
+}
+* { box-sizing: border-box; }
+html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+body { margin: 0; background: var(--paper); color: var(--ink); min-height: 100%; }
+.wrap { max-width: 780px; margin: 0 auto; padding: 2.5rem 1.25rem 5rem; }
+header { margin-bottom: 2rem; }
+.kicker { font-size: 0.8rem; color: var(--oxblood); letter-spacing: 0.02em; margin: 0 0 0.4rem; }
+h1 { font-family: "Source Serif 4", Georgia, serif; font-weight: 700; font-size: clamp(1.7rem, 4vw, 2.3rem); line-height: 1.15; margin: 0 0 0.6rem; }
+.lede { color: var(--ink-soft); font-size: 0.98rem; line-height: 1.55; max-width: 62ch; }
+.criteria { color: var(--ink-soft); font-size: 0.88rem; line-height: 1.6; margin-top: 0.9rem; }
+.criteria b { color: var(--ink); font-weight: 600; }
+.sources { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 0.75rem; align-items: start; }
+@media (max-width: 620px) { .sources { grid-template-columns: 1fr; } }
+.lit-col { display: flex; flex-direction: column; gap: 1rem; }
+.src-card { background: var(--paper-raised); border: 1px solid var(--line); border-radius: 3px; padding: 1.1rem; }
+.src-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; }
+.src-card h3 { font-family: "Source Serif 4", Georgia, serif; font-size: 1.02rem; margin: 0 0 0.15rem; }
+.src-hint { color: var(--ink-soft); font-size: 0.8rem; margin: 0 0 0.7rem; }
+.remove-btn { background: none; border: 1px solid var(--line); color: var(--ink-soft); border-radius: 2px;
+  cursor: pointer; font-size: 0.8rem; line-height: 1; padding: 0.2rem 0.5rem; }
+.remove-btn:hover { border-color: var(--oxblood-soft); color: var(--oxblood); }
+.add-source-btn { background: none; border: 1px dashed var(--line); color: var(--ink-soft); font-family: inherit;
+  font-size: 0.85rem; padding: 0.55rem 0.9rem; border-radius: 2px; cursor: pointer; width: 100%; margin-bottom: 1.5rem; }
+.add-source-btn:hover { border-color: var(--oxblood-soft); color: var(--oxblood); }
+.file-row { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.6rem; flex-wrap: wrap; }
+.file-btn { background: var(--paper); border: 1px solid var(--line); color: var(--ink); font-family: inherit;
+  font-size: 0.85rem; padding: 0.4rem 0.8rem; border-radius: 2px; cursor: pointer; }
+.file-btn:hover { border-color: var(--oxblood-soft); }
+.file-status { font-size: 0.78rem; color: var(--ink-soft); }
+textarea { width: 100%; min-height: 130px; resize: vertical; font-family: "Source Serif 4", Georgia, serif;
+  font-size: 0.92rem; line-height: 1.5; padding: 0.7rem; border: 1px solid var(--line); border-radius: 2px;
+  background: var(--paper); color: var(--ink); }
+textarea:focus, button:focus-visible, .file-btn:focus-visible { outline: 2px solid var(--oxblood-soft); outline-offset: 1px; }
+.row { display: flex; align-items: center; gap: 0.9rem; margin: 1.4rem 0; flex-wrap: wrap; }
+button.primary { background: var(--oxblood); color: #fdf9f3; border: none; padding: 0.7rem 1.4rem;
+  border-radius: 2px; font-size: 0.98rem; font-family: inherit; cursor: pointer; transition: background 0.15s ease; }
+button.primary:hover { background: var(--oxblood-soft); }
+button.primary:disabled { opacity: 0.55; cursor: default; }
+.status { font-size: 0.85rem; color: var(--ink-soft); }
+.progress-wrap { width: 100%; height: 4px; background: var(--line); border-radius: 2px; overflow: hidden; margin: -0.6rem 0 1.4rem; display: none; }
+.progress-wrap.on { display: block; }
+.progress-bar { height: 100%; background: var(--oxblood); width: 0%; transition: width 0.25s ease; }
+.error { border: 1px solid var(--oxblood); color: var(--oxblood); background: transparent;
+  padding: 0.75rem 0.9rem; border-radius: 2px; font-size: 0.9rem; margin-bottom: 1.25rem; }
+.warnbox { border: 1px solid var(--line); color: var(--ink-soft); background: transparent;
+  padding: 0.6rem 0.9rem; border-radius: 2px; font-size: 0.82rem; margin-bottom: 1.25rem; }
+.brief { background: var(--paper-raised); border: 1px solid var(--line); border-left: 3px solid var(--oxblood);
+  border-radius: 2px; padding: 1rem 1.15rem; margin-bottom: 1.5rem; font-size: 0.92rem; line-height: 1.55; }
+.brief p { margin: 0.25rem 0; }
+.brief b { color: var(--ink-soft); font-weight: 600; font-size: 0.78rem; display: block; margin-bottom: 0.1rem; }
+.brief .warn { color: var(--oxblood); font-size: 0.82rem; margin-top: 0.5rem; }
+.entry { background: var(--paper-raised); border: 1px solid var(--line); border-radius: 3px;
+  padding: 1.35rem 1.35rem 1rem; margin-bottom: 1.25rem; }
+.entry-num { font-size: 0.78rem; color: var(--oxblood); margin: 0 0 0.25rem; display: flex; gap: 0.5rem; align-items: center; }
+.entry-num .badge { font-size: 0.72rem; color: var(--ink-soft); border: 1px solid var(--line); border-radius: 2px; padding: 0.05rem 0.4rem; }
+.entry h2 { font-family: "Source Serif 4", Georgia, serif; font-weight: 600; font-size: 1.12rem; margin: 0 0 0.5rem; line-height: 1.35; }
+.relevanz { font-size: 0.86rem; color: var(--ink-soft); margin: 0 0 0.9rem; font-style: italic; }
+.field { border-top: 1px solid var(--line); padding: 0.8rem 0; }
+.field:first-of-type { border-top: none; }
+.field-label { font-size: 0.78rem; color: var(--ink-soft); margin: 0 0 0.35rem; }
+.field-text { font-family: "Source Serif 4", Georgia, serif; font-size: 0.98rem; line-height: 1.55; margin: 0; }
+.field-text.quote { font-style: italic; }
+.field-foot { display: flex; justify-content: flex-end; margin-top: 0.4rem; }
+.copy-btn { background: none; border: 1px solid var(--line); color: var(--ink-soft); font-family: inherit;
+  font-size: 0.76rem; padding: 0.25rem 0.6rem; border-radius: 2px; cursor: pointer; transition: all 0.15s ease; }
+.copy-btn:hover { border-color: var(--oxblood-soft); color: var(--oxblood); }
+.copy-btn.done { border-color: var(--ok); color: var(--ok); }
+.summary { color: var(--ink-soft); font-size: 0.92rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <p class="kicker">Schreibwerkstatt · Zitattechnik</p>
+    <h1>Zitat-Werkstatt</h1>
+    <p class="lede">Exposé und eine oder mehrere Literaturquellen hochladen. Das Tool verarbeitet jede Quelle vollständig (abschnittsweise) und ermittelt, welche Passagen für Ihre These relevant sind — zitierfertig im Harvard-Stil.</p>
+    <p class="criteria"><b>Gegen Patchwriting:</b> Die Paraphrasen übernehmen weder Satzbau noch Schlüsselvokabular des Originals. Autor und Jahr werden aus dem PDF erkannt, wo möglich — bitte vor Gebrauch gegenprüfen. Gescannte PDFs ohne eingebetteten Text werden automatisch per Texterkennung (OCR) gelesen.</p>
+  </header>
+
+  <div class="sources">
+    <div class="src-card">
+      <h3>Exposé</h3>
+      <p class="src-hint">These, Forschungsfrage, Kapitelstruktur</p>
+      <div class="file-row">
+        <button class="file-btn" id="expoBtn" type="button">PDF wählen</button>
+        <span class="file-status" id="expoStatus">kein PDF geladen</span>
+      </div>
+      <input type="file" id="expoFile" accept="application/pdf" hidden>
+      <textarea id="expoText" placeholder="… oder Text/Forschungsfrage direkt einfügen"></textarea>
+    </div>
+
+    <div class="lit-col" id="litSources"></div>
+  </div>
+
+  <button class="add-source-btn" id="addSourceBtn" type="button">+ weitere Literaturquelle hinzufügen</button>
+
+  <div class="row">
+    <button class="primary" id="run">Relevante Zitate ermitteln</button>
+    <span class="status" id="status"></span>
+  </div>
+  <div class="progress-wrap" id="progressWrap"><div class="progress-bar" id="progressBar"></div></div>
+
+  <div id="errorBox"></div>
+  <div id="briefBox"></div>
+  <div id="results"></div>
+</div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+const CHUNK_CHARS = 14000; // pro Analyse-Abschnitt, damit auch lange Literatur vollständig verarbeitet wird
+const OCR_AVG_CHARS_THRESHOLD = 25; // unterhalb dieses Durchschnitts pro Seite wird OCR versucht
+
+const expoFile = document.getElementById('expoFile');
+const expoBtn = document.getElementById('expoBtn');
+const expoStatus = document.getElementById('expoStatus');
+const expoText = document.getElementById('expoText');
+
+const litSourcesEl = document.getElementById('litSources');
+const addSourceBtn = document.getElementById('addSourceBtn');
+
+const runBtn = document.getElementById('run');
+const statusEl = document.getElementById('status');
+const errorBox = document.getElementById('errorBox');
+const briefBox = document.getElementById('briefBox');
+const resultsEl = document.getElementById('results');
+const progressWrap = document.getElementById('progressWrap');
+const progressBar = document.getElementById('progressBar');
+
+expoBtn.addEventListener('click', () => expoFile.click());
+expoFile.addEventListener('change', async () => {
+  const f = expoFile.files[0];
+  if (!f) return;
+  try { expoText.value = await extractPdf(f, expoStatus); }
+  catch (e) { console.error(e); expoStatus.textContent = 'Fehler beim Lesen'; }
+});
+
+// ---------- Mehrere Literaturquellen ----------
+
+let sourceCount = 0;
+
+function createSourceCard() {
+  sourceCount += 1;
+  const num = sourceCount;
+  const card = document.createElement('div');
+  card.className = 'src-card';
+  card.innerHTML = `
+    <div class="src-card-head">
+      <h3>Literatur ${num}</h3>
+      ${num > 1 ? '<button type="button" class="remove-btn" aria-label="Quelle entfernen">Entfernen</button>' : ''}
+    </div>
+    <p class="src-hint">Fachtext, aus dem zitiert werden soll — wird vollständig verarbeitet</p>
+    <div class="file-row">
+      <button class="file-btn" type="button">PDF wählen</button>
+      <span class="file-status">kein PDF geladen</span>
+    </div>
+    <input type="file" accept="application/pdf" hidden>
+    <textarea placeholder="… oder Text direkt einfügen"></textarea>
+  `;
+  const fileBtn = card.querySelector('.file-btn');
+  const fileInput = card.querySelector('input[type=file]');
+  const status = card.querySelector('.file-status');
+  const textarea = card.querySelector('textarea');
+  const removeBtn = card.querySelector('.remove-btn');
+
+  fileBtn.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', async () => {
+    const f = fileInput.files[0];
+    if (!f) return;
+    try { textarea.value = await extractPdf(f, status); }
+    catch (e) { console.error(e); status.textContent = 'Fehler beim Lesen'; }
+  });
+  if (removeBtn) removeBtn.addEventListener('click', () => card.remove());
+
+  return card;
+}
+
+addSourceBtn.addEventListener('click', () => {
+  litSourcesEl.appendChild(createSourceCard());
+});
+
+// Immer mit einer Literaturquelle starten
+litSourcesEl.appendChild(createSourceCard());
+
+// ---------- PDF-Extraktion inkl. OCR-Fallback ----------
+
+let ocrWorkerPromise = null;
+function getOcrWorker() {
+  if (!ocrWorkerPromise) ocrWorkerPromise = Tesseract.createWorker('deu');
+  return ocrWorkerPromise;
+}
+
+async function ocrPage(page) {
+  const viewport = page.getViewport({ scale: 2 });
+  const canvas = document.createElement('canvas');
+  canvas.width = viewport.width;
+  canvas.height = viewport.height;
+  const ctx = canvas.getContext('2d');
+  await page.render({ canvasContext: ctx, viewport }).promise;
+  const worker = await getOcrWorker();
+  const { data } = await worker.recognize(canvas);
+  return (data.text || '').trim();
+}
+
+async function extractPdf(file, statusEl) {
+  statusEl.textContent = 'Lese PDF …';
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+  const pages = pdf.numPages;
+  const pageTexts = [];
+  let totalChars = 0;
+
+  for (let p = 1; p <= pages; p++) {
+    statusEl.textContent = `Lese Seite ${p} / ${pages} …`;
+    const page = await pdf.getPage(p);
+    const content = await page.getTextContent();
+    const text = content.items.map(it => it.str).join(' ').trim();
+    pageTexts.push({ p, page, text });
+    totalChars += text.length;
+  }
+
+  const avgChars = totalChars / pages;
+  let usedOcr = false;
+  if (avgChars < OCR_AVG_CHARS_THRESHOLD) {
+    usedOcr = true;
+    for (const pt of pageTexts) {
+      if (pt.text.length < 10) {
+        statusEl.textContent = `Kein eingebetteter Text – OCR Seite ${pt.p} / ${pages} …`;
+        try { pt.text = await ocrPage(pt.page); }
+        catch (e) { console.error('OCR-Fehler Seite', pt.p, e); }
+      }
+    }
+  }
+
+  const out = pageTexts.map(pt => `\n[Seite ${pt.p}]\n${pt.text}\n`).join('');
+  statusEl.textContent = `${pages} Seite(n) geladen${usedOcr ? ' (per OCR)' : ''}`;
+  return out.trim();
+}
+
+function escapeHtml(str) {
+  return String(str ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// Text in Abschnitte teilen, ohne Seiten mittendrin zu zerschneiden
+function splitIntoChunks(text, maxChars) {
+  const pageBlocks = text.split(/(?=\[Seite \d+\])/g).filter(Boolean);
+  if (pageBlocks.length === 0) return [text];
+  const chunks = [];
+  let current = '';
+  for (const block of pageBlocks) {
+    if (current && (current.length + block.length) > maxChars) {
+      chunks.push(current);
+      current = block;
+    } else {
+      current += block;
+    }
+  }
+  if (current) chunks.push(current);
+  return chunks;
+}
+
+function fieldBlock(label, text, isQuote) {
+  const id = 'f' + Math.random().toString(36).slice(2, 9);
+  return `<div class="field">
+    <p class="field-label">${label}</p>
+    <p class="field-text${isQuote ? ' quote' : ''}" id="${id}">${escapeHtml(text)}</p>
+    <div class="field-foot"><button class="copy-btn" data-target="${id}">Kopieren</button></div>
+  </div>`;
+}
+
+function renderBrief(briefs) {
+  briefBox.innerHTML = briefs.map(b => `
+    <div class="brief">
+      ${briefs.length > 1 ? `<b>${escapeHtml(b.sourceLabel)}</b>` : ''}
+      <b>Leitfrage aus dem Exposé</b>
+      <p>${escapeHtml(b.leitfrage || '—')}</p>
+      <b>Erkannte Quelle</b>
+      <p>${escapeHtml([b.erkannter_autor, b.erkanntes_jahr].filter(Boolean).join(', ') || 'nicht sicher erkannt')}</p>
+      ${b.quellen_hinweis ? `<p class="warn">${escapeHtml(b.quellen_hinweis)}</p>` : ''}
+      ${b.chunkCount > 1 ? `<p style="margin-top:0.5rem;color:var(--ink-soft);font-size:0.78rem;">Literatur wurde in ${b.chunkCount} Abschnitten vollständig analysiert.</p>` : ''}
+    </div>
+  `).join('');
+}
+
+function renderEntries(entries, multiSource) {
+  resultsEl.innerHTML = entries.map((e, i) => `
+    <article class="entry">
+      <p class="entry-num">Kernaussage ${i + 1}${multiSource ? `<span class="badge">${escapeHtml(e.quelle)}</span>` : ''}</p>
+      <h2>${escapeHtml(e.kernargument)}</h2>
+      ${e.relevanz ? `<p class="relevanz">${escapeHtml(e.relevanz)}</p>` : ''}
+      ${fieldBlock('Direktes Zitat', e.direktes_zitat, true)}
+      ${fieldBlock('Indirektes Zitat (integrierend)', e.indirekt_integrierend, false)}
+      ${fieldBlock('Indirektes Zitat (nicht-integrierend)', e.indirekt_nicht_integrierend, false)}
+      <div class="field">
+        <p class="field-label">Zusammenfassung</p>
+        <p class="summary">${escapeHtml(e.zusammenfassung)}</p>
+      </div>
+    </article>
+  `).join('');
+
+  resultsEl.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const target = document.getElementById(btn.dataset.target);
+      try {
+        await navigator.clipboard.writeText(target.textContent);
+        btn.textContent = 'Kopiert';
+        btn.classList.add('done');
+        setTimeout(() => { btn.textContent = 'Kopieren'; btn.classList.remove('done'); }, 1600);
+      } catch { btn.textContent = 'Fehler'; }
+    });
+  });
+}
+
+function buildPromptFirst(expo, chunk, multiPart) {
+  return `Du bist ein wissenschaftlicher Schreibassistent nach den Kriterien des Schreibzentrums der Universität Frankfurt am Main. Du arbeitest mit Harvard-Zitierweise (Kurzbeleg im Text: Nachname Jahr: Seite).
+
+EXPOSÉ (enthält These/Forschungsfrage/Kapitelstruktur der Hausarbeit):
+"""
+${expo}
+"""
+
+LITERATUR${multiPart ? ' (erster Abschnitt eines längeren Textes; Seiten sind mit "[Seite N]" markiert)' : ' (Seiten sind mit "[Seite N]" markiert)'}:
+"""
+${chunk}
+"""
+
+Aufgabe:
+1. Fasse die Leitfrage/These des Exposés in einem Satz zusammen (Feld "leitfrage").
+2. Versuche, Nachname des Autors/der Autorin und Erscheinungsjahr aus dem Literaturtext zu erkennen (Titelseite, Kopfzeile, Selbstverweis o.ä.). Wenn unsicher: Felder leer lassen und in "quellen_hinweis" kurz erklären, dass die Angaben manuell zu ergänzen sind.
+3. Wähle NUR die Passagen aus diesem Abschnitt aus, die inhaltlich tatsächlich relevant für die Leitfrage des Exposés sind — ignoriere thematisch abseitige Passagen. Wenn nichts relevant ist, gib ein leeres "entries"-Array zurück.
+4. Erstelle für jede ausgewählte Kernaussage:
+- kernargument: Kurzbezeichnung, wofür/für welches Kapitel der Hausarbeit relevant.
+- relevanz: ein Satz, warum diese Aussage die These/Leitfrage des Exposés stützt oder für sie relevant ist.
+- direktes_zitat: wortgenaue Wiedergabe in Anführungszeichen, am Ende im Harvard-Stil "(Nachname Jahr: S. X)" mit der Seitenzahl aus dem nächstgelegenen [Seite N]-Marker; falls Autor/Jahr unsicher, Platzhalter "([Autor] [Jahr]: S. X)" verwenden.
+- indirekt_integrierend: eine sprachlich eigenständige Paraphrase (andere Satzstruktur, nicht nur Synonyme) mit Autor aktiv im Satz, z.B. "Nachname (Jahr) argumentiert, dass …". Verhindere Patchwriting konsequent.
+- indirekt_nicht_integrierend: eine weitere, unabhängig formulierte Paraphrase mit Fokus auf dem Fakt, Quelle in Klammern am Satzende im Harvard-Stil, z.B. "… (vgl. Nachname Jahr: S. X)."
+- zusammenfassung: ein kurzer Satz zum größeren Zusammenhang dieser Textpassage.
+
+Antworte AUSSCHLIESSLICH mit einem JSON-Objekt (keine Markdown-Codeblöcke, kein Fließtext davor oder danach) in dieser Form:
+{"leitfrage":"...","erkannter_autor":"...","erkanntes_jahr":"...","quellen_hinweis":"...","entries":[{"kernargument":"...","relevanz":"...","direktes_zitat":"...","indirekt_integrierend":"...","indirekt_nicht_integrierend":"...","zusammenfassung":"..."}]}`;
+}
+
+function buildPromptNext(expo, chunk, leitfrage, autor, jahr) {
+  return `Du setzt die Analyse eines längeren Literaturtextes fort (weiterer Abschnitt desselben Textes). Arbeite mit Harvard-Zitierweise.
+
+LEITFRAGE DES EXPOSÉS: ${leitfrage}
+BEKANNTE QUELLENANGABE: ${autor ? autor : '[Autor]'}, ${jahr ? jahr : '[Jahr]'}
+
+WEITERER LITERATURABSCHNITT (Seiten mit "[Seite N]" markiert):
+"""
+${chunk}
+"""
+
+Wähle NUR Passagen aus diesem Abschnitt, die inhaltlich relevant für die obige Leitfrage sind — ignoriere thematisch abseitige Passagen. Wenn nichts relevant ist, gib ein leeres "entries"-Array zurück. Erstelle für jede relevante Kernaussage dieselben Felder wie zuvor: kernargument, relevanz, direktes_zitat (Harvard-Stil mit Seitenzahl aus [Seite N]), indirekt_integrierend (eigenständige Paraphrase, Autor aktiv im Satz), indirekt_nicht_integrierend (eigenständige Paraphrase, Quelle in Klammern am Satzende), zusammenfassung. Kein Patchwriting — echte, eigenständige Umformulierung.
+
+Antworte AUSSCHLIESSLICH mit einem JSON-Objekt: {"entries":[{"kernargument":"...","relevanz":"...","direktes_zitat":"...","indirekt_integrierend":"...","indirekt_nicht_integrierend":"...","zusammenfassung":"..."}]}`;
+}
+
+// ---------- Aufruf der eigenen Server-API statt window.claude ----------
+
+async function callAnalyze(prompt) {
+  const res = await fetch('/api/analyze', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(body.error || `API-Fehler (${res.status})`);
+  }
+  return body;
+}
+
+// Verarbeitet eine einzelne Literaturquelle vollständig (alle Chunks) und liefert brief + entries zurück
+async function processSource(expo, sourceText, sourceLabel, onProgress) {
+  const chunks = splitIntoChunks(sourceText, CHUNK_CHARS);
+  let brief = null;
+  let entries = [];
+  let failedChunks = 0;
+
+  for (let i = 0; i < chunks.length; i++) {
+    onProgress(i, chunks.length);
+    try {
+      const data = i === 0
+        ? await callAnalyze(buildPromptFirst(expo, chunks[i], chunks.length > 1))
+        : await callAnalyze(buildPromptNext(expo, chunks[i], brief?.leitfrage || '', brief?.erkannter_autor, brief?.erkanntes_jahr));
+
+      if (i === 0) brief = data;
+      entries = entries.concat((data.entries || []).map(e => ({ ...e, quelle: sourceLabel })));
+    } catch (chunkErr) {
+      console.error(`Chunk-Fehler (${sourceLabel})`, i, chunkErr);
+      failedChunks++;
+    }
+  }
+
+  return { brief, entries, chunkCount: chunks.length, failedChunks, sourceLabel };
+}
+
+async function run() {
+  const expo = expoText.value.trim();
+  const sourceCards = Array.from(litSourcesEl.querySelectorAll('.src-card'));
+  const sources = sourceCards
+    .map((card, i) => ({
+      label: card.querySelector('h3').textContent,
+      text: card.querySelector('textarea').value.trim(),
+    }))
+    .filter(s => s.text.length > 0);
+
+  errorBox.innerHTML = ''; briefBox.innerHTML = ''; resultsEl.innerHTML = '';
+
+  if (!expo || sources.length === 0) {
+    errorBox.innerHTML = '<div class="error">Bitte Exposé und mindestens eine Literaturquelle hochladen oder einfügen.</div>';
+    return;
+  }
+
+  runBtn.disabled = true;
+  progressWrap.classList.add('on');
+
+  const allBriefs = [];
+  let allEntries = [];
+  let totalFailed = 0;
+
+  try {
+    for (let s = 0; s < sources.length; s++) {
+      const source = sources[s];
+      const result = await processSource(expo, source.text, source.label, (chunkIdx, chunkTotal) => {
+        statusEl.textContent = `${source.label}: Abschnitt ${chunkIdx + 1} / ${chunkTotal} …`;
+        const overall = ((s + chunkIdx / chunkTotal) / sources.length) * 100;
+        progressBar.style.width = Math.round(overall) + '%';
+      });
+
+      if (result.brief) {
+        allBriefs.push({ ...result.brief, sourceLabel: source.label, chunkCount: result.chunkCount });
+      }
+      allEntries = allEntries.concat(result.entries);
+      totalFailed += result.failedChunks;
+    }
+
+    progressBar.style.width = '100%';
+
+    if (allBriefs.length === 0) throw new Error('no-brief');
+    renderBrief(allBriefs);
+
+    if (allEntries.length) {
+      renderEntries(allEntries, sources.length > 1);
+      statusEl.textContent = `${allEntries.length} relevante Kernaussage(n) aus ${sources.length} Quelle(n) gefunden.`;
+    } else {
+      resultsEl.innerHTML = '<div class="warnbox">Keine relevanten Passagen gefunden — prüfen Sie, ob Exposé und Literatur thematisch zusammenpassen.</div>';
+      statusEl.textContent = '';
+    }
+
+    if (totalFailed) {
+      errorBox.innerHTML = `<div class="warnbox">${totalFailed} Abschnitt(e) konnten nicht analysiert werden und wurden übersprungen. Ergebnis ggf. unvollständig — erneut versuchen empfohlen.</div>`;
+    }
+  } catch (err) {
+    console.error(err);
+    errorBox.innerHTML = `<div class="error">Die Analyse ist fehlgeschlagen. ${err.message === 'no-brief' ? '' : escapeHtml(err.message || '')} Bitte erneut versuchen.</div>`;
+    statusEl.textContent = '';
+  } finally {
+    runBtn.disabled = false;
+    setTimeout(() => { progressWrap.classList.remove('on'); progressBar.style.width = '0%'; }, 600);
+  }
+}
+
+runBtn.addEventListener('click', run);
+</script>
+</body>
+</html>
