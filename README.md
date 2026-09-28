@@ -22,7 +22,7 @@ Frankfurt am Main zur Vermeidung von Patchwriting.
 
 ## Architektur
 
-- `index.html` — komplette Frontend-Anwendung (kein Build-Schritt nötig)
+- `index.html` — Markup; `css/styles.css` — Layout; `js/app.js` — PDF-Extraktion, Prompts, Analyse; `js/matrix.js` — Schreibmatrix (kein Build-Schritt nötig)
 - `api/analyze.js` — Vercel Serverless Function, ruft die Anthropic API **serverseitig** auf
 
 Die Analyse läuft **nicht mehr** über `window.claude` (das nur innerhalb von
@@ -37,7 +37,7 @@ Anthropic-API-Key serverseitig verwendet.
    `ANTHROPIC_API_KEY` mit einem gültigen Anthropic-API-Key anlegen
    (für Production, Preview und Development).
 3. Deployen — Vercel erkennt `api/analyze.js` automatisch als Serverless Function.
-4. `npm install` läuft automatisch (Abhängigkeit: `@anthropic-ai/sdk`).
+4. `npm install` läuft automatisch (keine Abhängigkeiten, die Function nutzt `fetch`).
 
 Lokal testen: `vercel dev` (benötigt die Vercel CLI und eine lokale `.env`
 mit `ANTHROPIC_API_KEY=...`).
@@ -51,3 +51,8 @@ mit `ANTHROPIC_API_KEY=...`).
 ## Lizenz
 
 MIT, siehe [LICENSE](LICENSE).
+
+## Token-Sparen
+
+- Lokaler Vorfilter: Literaturverzeichnisse und (Schnell-Modus) Abschnitte ohne Wortbezug zum Exposé gehen nicht an die API.
+- Schnell-Modus nutzt Haiku; die Schreibmatrix läuft immer im Schnell-Modus.
