@@ -1,17 +1,17 @@
 :root {
-  --paper: #f7f4ec;
-  --paper-raised: #fffdf8;
-  --paper-sunk: #efeadf;
-  --ink: #1f1d1a;
-  --ink-soft: #625c52;
-  --line: #e2dbcc;
-  --line-strong: #cfc6b3;
-  --oxblood: #7a2e24;
-  --oxblood-soft: #a8493a;
-  --oxblood-tint: #f3e4df;
-  --ok: #3c5a43;
-  --ok-tint: #e3ebe2;
-  --on-accent: #fdf9f3;
+  --paper: #f1e8d8;
+  --paper-raised: #faf5ec;
+  --paper-sunk: #e8dcc7;
+  --ink: #3a281c;
+  --ink-soft: #6e5846;
+  --line: #ddcdb3;
+  --line-strong: #c8b393;
+  --oxblood: #5b3b27;
+  --oxblood-soft: #7d5439;
+  --oxblood-tint: #e9dbc2;
+  --ok: #4f5a36;
+  --ok-tint: #e4e3cc;
+  --on-accent: #faf5ec;
   --radius: 10px;
   --radius-sm: 6px;
   --shadow: 0 1px 2px rgba(60, 45, 25, 0.05), 0 4px 16px -6px rgba(60, 45, 25, 0.1);
@@ -25,18 +25,18 @@
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --paper: #181613; --paper-raised: #221f1a; --paper-sunk: #1d1a16; --ink: #ece7dd;
-    --ink-soft: #aea696; --line: #36312a; --line-strong: #4a443a; --oxblood: #e08a78;
-    --oxblood-soft: #eaa191; --oxblood-tint: #3a2622; --ok: #8fb898; --ok-tint: #22302590;
+    --paper: #1b1510; --paper-raised: #251d16; --paper-sunk: #201913; --ink: #efe4d2;
+    --ink-soft: #b8a58c; --line: #3a2e23; --line-strong: #4f4032; --oxblood: #d8b68c;
+    --oxblood-soft: #e5c9a4; --oxblood-tint: #33271c; --ok: #8fb898; --ok-tint: #22302590;
     --on-accent: #1c1512; --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 16px -6px rgba(0,0,0,.4);
     --shadow-lift: 0 2px 4px rgba(0,0,0,.35), 0 12px 28px -10px rgba(0,0,0,.55);
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --paper: #181613; --paper-raised: #221f1a; --paper-sunk: #1d1a16; --ink: #ece7dd;
-  --ink-soft: #aea696; --line: #36312a; --line-strong: #4a443a; --oxblood: #e08a78;
-  --oxblood-soft: #eaa191; --oxblood-tint: #3a2622; --ok: #8fb898; --ok-tint: #22302590;
+  --paper: #1b1510; --paper-raised: #251d16; --paper-sunk: #201913; --ink: #efe4d2;
+  --ink-soft: #b8a58c; --line: #3a2e23; --line-strong: #4f4032; --oxblood: #d8b68c;
+  --oxblood-soft: #e5c9a4; --oxblood-tint: #33271c; --ok: #8fb898; --ok-tint: #22302590;
   --on-accent: #1c1512; --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 16px -6px rgba(0,0,0,.4);
   --shadow-lift: 0 2px 4px rgba(0,0,0,.35), 0 12px 28px -10px rgba(0,0,0,.55);
   color-scheme: dark;
@@ -58,6 +58,11 @@ body {
 
 /* ---------- Header ---------- */
 header { margin-bottom: 2.5rem; }
+.back-home {
+  display: block; width: fit-content; margin-bottom: 1.75rem; font-size: 0.85rem;
+  color: var(--ink-soft); text-decoration: none;
+}
+.back-home:hover { color: var(--oxblood); }
 .kicker {
   display: inline-flex; align-items: center; gap: 0.5rem;
   font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.12em;
