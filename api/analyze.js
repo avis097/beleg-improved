@@ -1,5 +1,8 @@
 // Vercel Serverless Function (CommonJS, läuft ohne "type": "module")
-const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
+const MODELS = {
+  fast: process.env.ANTHROPIC_MODEL_FAST || "claude-haiku-4-5-20251001",
+  precise: process.env.ANTHROPIC_MODEL || "claude-sonnet-5",
+};
 const MAX_PROMPT_CHARS = 200000;
 
 // Extrahiert das erste vollständige JSON-Objekt, auch wenn Text/Fences drumherum stehen.
@@ -11,7 +14,7 @@ function extractJson(raw) {
   return JSON.parse(text.slice(start, end + 1));
 }
 
-async function callAnthropic(prompt) {
+async function callAnthropic(prompt, model) {
   const r = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -20,7 +23,7 @@ async function callAnthropic(prompt) {
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      model: MODEL,
+      model,
       max_tokens: 8000,
       messages: [{ role: "user", content: prompt }],
     }),
@@ -38,14 +41,15 @@ module.exports = async (req, res) => {
 
   let body = req.body;
   if (typeof body === "string") { try { body = JSON.parse(body); } catch { body = {}; } }
-  const { prompt } = body || {};
+  const { prompt, mode } = body || {};
+  const model = MODELS[mode] || MODELS.fast;
   if (!prompt || typeof prompt !== "string") return res.status(400).json({ error: "prompt fehlt" });
   if (prompt.length > MAX_PROMPT_CHARS) return res.status(413).json({ error: "Anfrage zu groß." });
 
   let lastErr = "unbekannter Fehler";
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const { r, data } = await callAnthropic(prompt);
+      const { r, data } = await callAnthropic(prompt, model);
       if (!r.ok) {
         lastErr = `Anthropic-API ${r.status}: ${data.error?.message || "Fehler"}`;
         // Nur bei Überlast/Rate-Limit erneut versuchen

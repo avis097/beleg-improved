@@ -123,6 +123,10 @@ button.primary:disabled { opacity: 0.55; cursor: default; }
 
   <div class="row">
     <button class="primary" id="run">Relevante Zitate ermitteln</button>
+    <select class="file-btn" id="mode" aria-label="Analyse-Modus" title="Schnell: deutlich kürzere Wartezeit. Genau: sorgfältigere Auswahl und Paraphrasen.">
+      <option value="fast">Schnell</option>
+      <option value="precise">Genau (langsamer)</option>
+    </select>
     <span class="status" id="status"></span>
   </div>
   <div class="progress-wrap" id="progressWrap"><div class="progress-bar" id="progressBar"></div></div>
@@ -211,20 +215,22 @@ litSourcesEl.appendChild(createSourceCard());
 
 // ---------- PDF-Extraktion inkl. OCR-Fallback ----------
 
-let ocrWorkerPromise = null;
-function getOcrWorker() {
-  if (!ocrWorkerPromise) ocrWorkerPromise = Tesseract.createWorker('deu');
-  return ocrWorkerPromise;
+const OCR_WORKERS = Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 2) - 1));
+let ocrWorkersPromise = null;
+function getOcrWorkers() {
+  if (!ocrWorkersPromise) {
+    ocrWorkersPromise = Promise.all(Array.from({ length: OCR_WORKERS }, () => Tesseract.createWorker('deu')));
+  }
+  return ocrWorkersPromise;
 }
 
-async function ocrPage(page) {
-  const viewport = page.getViewport({ scale: 2 });
+async function ocrPage(page, worker) {
+  const viewport = page.getViewport({ scale: 1.6 });
   const canvas = document.createElement('canvas');
   canvas.width = viewport.width;
   canvas.height = viewport.height;
   const ctx = canvas.getContext('2d');
   await page.render({ canvasContext: ctx, viewport }).promise;
-  const worker = await getOcrWorker();
   const { data } = await worker.recognize(canvas);
   return (data.text || '').trim();
 }
@@ -237,26 +243,31 @@ async function extractPdf(file, statusEl) {
   const pageTexts = [];
   let totalChars = 0;
 
-  for (let p = 1; p <= pages; p++) {
-    statusEl.textContent = `Lese Seite ${p} / ${pages} …`;
+  const pageNums = Array.from({ length: pages }, (_, i) => i + 1);
+  let read = 0;
+  await runPool(pageNums, 8, async (p) => {
     const page = await pdf.getPage(p);
     const content = await page.getTextContent();
     const text = content.items.map(it => it.str).join(' ').trim();
-    pageTexts.push({ p, page, text });
+    pageTexts[p - 1] = { p, page, text };
     totalChars += text.length;
-  }
+    statusEl.textContent = `Lese Seite ${++read} / ${pages} …`;
+  });
 
   const avgChars = totalChars / pages;
   let usedOcr = false;
   if (avgChars < OCR_AVG_CHARS_THRESHOLD) {
     usedOcr = true;
-    for (const pt of pageTexts) {
-      if (pt.text.length < 10) {
-        statusEl.textContent = `Kein eingebetteter Text – OCR Seite ${pt.p} / ${pages} …`;
-        try { pt.text = await ocrPage(pt.page); }
-        catch (e) { console.error('OCR-Fehler Seite', pt.p, e); }
-      }
-    }
+    const todo = pageTexts.filter(pt => pt.text.length < 10);
+    statusEl.textContent = 'Starte Texterkennung (OCR) …';
+    const workers = await getOcrWorkers();
+    let ocrDone = 0, slot = 0;
+    await runPool(todo, workers.length, async (pt) => {
+      const w = workers[slot++ % workers.length];
+      try { pt.text = await ocrPage(pt.page, w); }
+      catch (e) { console.error('OCR-Fehler Seite', pt.p, e); }
+      statusEl.textContent = `OCR Seite ${++ocrDone} / ${todo.length} …`;
+    });
   }
 
   const out = pageTexts.map(pt => `\n[Seite ${pt.p}]\n${pt.text}\n`).join('');
@@ -354,7 +365,7 @@ ${chunk}
 Aufgabe:
 1. Fasse die Leitfrage/These des Exposés in einem Satz zusammen (Feld "leitfrage").
 2. Versuche, Nachname des Autors/der Autorin und Erscheinungsjahr aus dem Literaturtext zu erkennen (Titelseite, Kopfzeile, Selbstverweis o.ä.). Wenn unsicher: Felder leer lassen und in "quellen_hinweis" kurz erklären, dass die Angaben manuell zu ergänzen sind.
-3. Wähle NUR die Passagen aus diesem Abschnitt aus, die inhaltlich tatsächlich relevant für die Leitfrage des Exposés sind — ignoriere thematisch abseitige Passagen. Wenn nichts relevant ist, gib ein leeres "entries"-Array zurück. Maximal 5 Kernaussagen pro Abschnitt.
+3. Wähle NUR die Passagen aus diesem Abschnitt aus, die inhaltlich tatsächlich relevant für die Leitfrage des Exposés sind — ignoriere thematisch abseitige Passagen. Wenn nichts relevant ist, gib ein leeres "entries"-Array zurück. Maximal 4 Kernaussagen pro Abschnitt.
 4. Erstelle für jede ausgewählte Kernaussage:
 - kernargument: Kurzbezeichnung, wofür/für welches Kapitel der Hausarbeit relevant.
 - relevanz: ein Satz, warum diese Aussage die These/Leitfrage des Exposés stützt oder für sie relevant ist.
@@ -378,7 +389,7 @@ WEITERER LITERATURABSCHNITT (Seiten mit "[Seite N]" markiert):
 ${chunk}
 """
 
-Wähle NUR Passagen aus diesem Abschnitt, die inhaltlich relevant für die obige Leitfrage sind — ignoriere thematisch abseitige Passagen. Wenn nichts relevant ist, gib ein leeres "entries"-Array zurück. Maximal 5 Kernaussagen pro Abschnitt. Erstelle für jede relevante Kernaussage dieselben Felder wie zuvor: kernargument, relevanz, direktes_zitat (Harvard-Stil mit Seitenzahl aus [Seite N]), indirekt_integrierend (eigenständige Paraphrase, Autor aktiv im Satz), indirekt_nicht_integrierend (eigenständige Paraphrase, Quelle in Klammern am Satzende), zusammenfassung. Kein Patchwriting — echte, eigenständige Umformulierung.
+Wähle NUR Passagen aus diesem Abschnitt, die inhaltlich relevant für die obige Leitfrage sind — ignoriere thematisch abseitige Passagen. Wenn nichts relevant ist, gib ein leeres "entries"-Array zurück. Maximal 4 Kernaussagen pro Abschnitt. Erstelle für jede relevante Kernaussage dieselben Felder wie zuvor: kernargument, relevanz, direktes_zitat (Harvard-Stil mit Seitenzahl aus [Seite N]), indirekt_integrierend (eigenständige Paraphrase, Autor aktiv im Satz), indirekt_nicht_integrierend (eigenständige Paraphrase, Quelle in Klammern am Satzende), zusammenfassung. Kein Patchwriting — echte, eigenständige Umformulierung.
 
 Antworte AUSSCHLIESSLICH mit einem JSON-Objekt: {"entries":[{"kernargument":"...","relevanz":"...","direktes_zitat":"...","indirekt_integrierend":"...","indirekt_nicht_integrierend":"...","zusammenfassung":"..."}]}`;
 }
@@ -389,7 +400,7 @@ async function callAnalyze(prompt) {
   const res = await fetch('/api/analyze', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt }),
+    body: JSON.stringify({ prompt, mode: document.getElementById('mode').value }),
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
@@ -399,7 +410,7 @@ async function callAnalyze(prompt) {
 }
 
 // Verarbeitet eine einzelne Literaturquelle vollständig (alle Chunks) und liefert brief + entries zurück
-const MAX_PARALLEL = 4; // gleichzeitige API-Aufrufe (Rate-Limit-schonend)
+const MAX_PARALLEL = 6; // gleichzeitige API-Aufrufe (Rate-Limit-schonend)
 
 // Einfacher Worker-Pool: führt worker(item, index) mit max. `limit` gleichzeitigen Aufrufen aus
 async function runPool(items, limit, worker) {
@@ -415,7 +426,7 @@ async function runPool(items, limit, worker) {
 
 // Verarbeitet eine Literaturquelle: Abschnitt 1 zuerst (liefert Leitfrage/Autor/Jahr),
 // alle weiteren Abschnitte danach parallel.
-async function processSource(expo, sourceText, sourceLabel, onChunkDone) {
+async function processSource(expo, sourceText, sourceLabel, onChunkDone, onPartial) {
   const chunks = splitIntoChunks(sourceText, CHUNK_CHARS);
   const perChunk = new Array(chunks.length).fill(null);
   let brief = null;
@@ -424,6 +435,7 @@ async function processSource(expo, sourceText, sourceLabel, onChunkDone) {
 
   const handle = (i, data) => {
     perChunk[i] = (data.entries || []).map(e => ({ ...e, quelle: sourceLabel }));
+    if (onPartial) onPartial(brief, perChunk.flat().filter(Boolean), chunks.length);
   };
   const fail = (i, err) => {
     console.error(`Chunk-Fehler (${sourceLabel})`, i, err);
@@ -489,7 +501,18 @@ let lastErr = '';
     };
     statusEl.textContent = `Analysiere … 0 / ${totalChunks} Abschnitte`;
 
-    const results = await Promise.all(sources.map(src => processSource(expo, src.text, src.label, onChunkDone)));
+    const partial = sources.map(() => ({ brief: null, entries: [], chunkCount: 0 }));
+    const refresh = () => {
+      const briefs = partial.map((pt, s) => pt.brief ? { ...pt.brief, sourceLabel: sources[s].label, chunkCount: pt.chunkCount } : null).filter(Boolean);
+      const entries = partial.flatMap(pt => pt.entries);
+      if (briefs.length) renderBrief(briefs);
+      if (entries.length) renderEntries(entries, sources.length > 1);
+    };
+    const results = await Promise.all(sources.map((src, s) =>
+      processSource(expo, src.text, src.label, onChunkDone, (brief, entries, chunkCount) => {
+        partial[s] = { brief, entries, chunkCount };
+        refresh();
+      })));
 
     results.forEach((result, s) => {
       if (result.brief) {
