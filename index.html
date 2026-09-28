@@ -354,7 +354,7 @@ ${chunk}
 Aufgabe:
 1. Fasse die Leitfrage/These des Exposés in einem Satz zusammen (Feld "leitfrage").
 2. Versuche, Nachname des Autors/der Autorin und Erscheinungsjahr aus dem Literaturtext zu erkennen (Titelseite, Kopfzeile, Selbstverweis o.ä.). Wenn unsicher: Felder leer lassen und in "quellen_hinweis" kurz erklären, dass die Angaben manuell zu ergänzen sind.
-3. Wähle NUR die Passagen aus diesem Abschnitt aus, die inhaltlich tatsächlich relevant für die Leitfrage des Exposés sind — ignoriere thematisch abseitige Passagen. Wenn nichts relevant ist, gib ein leeres "entries"-Array zurück.
+3. Wähle NUR die Passagen aus diesem Abschnitt aus, die inhaltlich tatsächlich relevant für die Leitfrage des Exposés sind — ignoriere thematisch abseitige Passagen. Wenn nichts relevant ist, gib ein leeres "entries"-Array zurück. Maximal 5 Kernaussagen pro Abschnitt.
 4. Erstelle für jede ausgewählte Kernaussage:
 - kernargument: Kurzbezeichnung, wofür/für welches Kapitel der Hausarbeit relevant.
 - relevanz: ein Satz, warum diese Aussage die These/Leitfrage des Exposés stützt oder für sie relevant ist.
@@ -378,7 +378,7 @@ WEITERER LITERATURABSCHNITT (Seiten mit "[Seite N]" markiert):
 ${chunk}
 """
 
-Wähle NUR Passagen aus diesem Abschnitt, die inhaltlich relevant für die obige Leitfrage sind — ignoriere thematisch abseitige Passagen. Wenn nichts relevant ist, gib ein leeres "entries"-Array zurück. Erstelle für jede relevante Kernaussage dieselben Felder wie zuvor: kernargument, relevanz, direktes_zitat (Harvard-Stil mit Seitenzahl aus [Seite N]), indirekt_integrierend (eigenständige Paraphrase, Autor aktiv im Satz), indirekt_nicht_integrierend (eigenständige Paraphrase, Quelle in Klammern am Satzende), zusammenfassung. Kein Patchwriting — echte, eigenständige Umformulierung.
+Wähle NUR Passagen aus diesem Abschnitt, die inhaltlich relevant für die obige Leitfrage sind — ignoriere thematisch abseitige Passagen. Wenn nichts relevant ist, gib ein leeres "entries"-Array zurück. Maximal 5 Kernaussagen pro Abschnitt. Erstelle für jede relevante Kernaussage dieselben Felder wie zuvor: kernargument, relevanz, direktes_zitat (Harvard-Stil mit Seitenzahl aus [Seite N]), indirekt_integrierend (eigenständige Paraphrase, Autor aktiv im Satz), indirekt_nicht_integrierend (eigenständige Paraphrase, Quelle in Klammern am Satzende), zusammenfassung. Kein Patchwriting — echte, eigenständige Umformulierung.
 
 Antworte AUSSCHLIESSLICH mit einem JSON-Objekt: {"entries":[{"kernargument":"...","relevanz":"...","direktes_zitat":"...","indirekt_integrierend":"...","indirekt_nicht_integrierend":"...","zusammenfassung":"..."}]}`;
 }
@@ -404,23 +404,25 @@ async function processSource(expo, sourceText, sourceLabel, onProgress) {
   let brief = null;
   let entries = [];
   let failedChunks = 0;
+let lastError = '';
 
   for (let i = 0; i < chunks.length; i++) {
     onProgress(i, chunks.length);
     try {
       const data = i === 0
         ? await callAnalyze(buildPromptFirst(expo, chunks[i], chunks.length > 1))
-        : await callAnalyze(buildPromptNext(expo, chunks[i], brief?.leitfrage || '', brief?.erkannter_autor, brief?.erkanntes_jahr));
+        : await callAnalyze(buildPromptNext(expo, chunks[i], brief?.leitfrage || expo.slice(0, 600), brief?.erkannter_autor, brief?.erkanntes_jahr));
 
       if (i === 0) brief = data;
       entries = entries.concat((data.entries || []).map(e => ({ ...e, quelle: sourceLabel })));
     } catch (chunkErr) {
       console.error(`Chunk-Fehler (${sourceLabel})`, i, chunkErr);
       failedChunks++;
+      lastError = chunkErr.message || String(chunkErr);
     }
   }
 
-  return { brief, entries, chunkCount: chunks.length, failedChunks, sourceLabel };
+  return { brief, entries, chunkCount: chunks.length, failedChunks, sourceLabel, lastError };
 }
 
 async function run() {
@@ -446,6 +448,7 @@ async function run() {
   const allBriefs = [];
   let allEntries = [];
   let totalFailed = 0;
+let lastErr = '';
 
   try {
     for (let s = 0; s < sources.length; s++) {
@@ -461,11 +464,12 @@ async function run() {
       }
       allEntries = allEntries.concat(result.entries);
       totalFailed += result.failedChunks;
+if (result.lastError) lastErr = result.lastError;
     }
 
     progressBar.style.width = '100%';
 
-    if (allBriefs.length === 0) throw new Error('no-brief');
+    if (allBriefs.length === 0) throw new Error(lastErr || 'no-brief');
     renderBrief(allBriefs);
 
     if (allEntries.length) {
@@ -477,7 +481,7 @@ async function run() {
     }
 
     if (totalFailed) {
-      errorBox.innerHTML = `<div class="warnbox">${totalFailed} Abschnitt(e) konnten nicht analysiert werden und wurden übersprungen. Ergebnis ggf. unvollständig — erneut versuchen empfohlen.</div>`;
+      errorBox.innerHTML = `<div class="warnbox">${totalFailed} Abschnitt(e) konnten nicht analysiert werden und wurden übersprungen. Ergebnis ggf. unvollständig — erneut versuchen empfohlen.${lastErr ? ' Letzter Fehler: ' + escapeHtml(lastErr) : ''}</div>`;
     }
   } catch (err) {
     console.error(err);
