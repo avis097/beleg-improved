@@ -49,7 +49,7 @@ module.exports = async (req, res) => {
       if (!r.ok) {
         lastErr = `Anthropic-API ${r.status}: ${data.error?.message || "Fehler"}`;
         // Nur bei Überlast/Rate-Limit erneut versuchen
-        if ([429, 500, 529].includes(r.status)) continue;
+        if ([429, 500, 529].includes(r.status)) { await new Promise(r => setTimeout(r, 1500)); continue; }
         return res.status(502).json({ error: lastErr });
       }
       const text = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("");

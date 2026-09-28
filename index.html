@@ -399,29 +399,58 @@ async function callAnalyze(prompt) {
 }
 
 // Verarbeitet eine einzelne Literaturquelle vollständig (alle Chunks) und liefert brief + entries zurück
-async function processSource(expo, sourceText, sourceLabel, onProgress) {
-  const chunks = splitIntoChunks(sourceText, CHUNK_CHARS);
-  let brief = null;
-  let entries = [];
-  let failedChunks = 0;
-let lastError = '';
+const MAX_PARALLEL = 4; // gleichzeitige API-Aufrufe (Rate-Limit-schonend)
 
-  for (let i = 0; i < chunks.length; i++) {
-    onProgress(i, chunks.length);
-    try {
-      const data = i === 0
-        ? await callAnalyze(buildPromptFirst(expo, chunks[i], chunks.length > 1))
-        : await callAnalyze(buildPromptNext(expo, chunks[i], brief?.leitfrage || expo.slice(0, 600), brief?.erkannter_autor, brief?.erkanntes_jahr));
-
-      if (i === 0) brief = data;
-      entries = entries.concat((data.entries || []).map(e => ({ ...e, quelle: sourceLabel })));
-    } catch (chunkErr) {
-      console.error(`Chunk-Fehler (${sourceLabel})`, i, chunkErr);
-      failedChunks++;
-      lastError = chunkErr.message || String(chunkErr);
+// Einfacher Worker-Pool: führt worker(item, index) mit max. `limit` gleichzeitigen Aufrufen aus
+async function runPool(items, limit, worker) {
+  let next = 0;
+  const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const idx = next++;
+      await worker(items[idx], idx);
     }
-  }
+  });
+  await Promise.all(runners);
+}
 
+// Verarbeitet eine Literaturquelle: Abschnitt 1 zuerst (liefert Leitfrage/Autor/Jahr),
+// alle weiteren Abschnitte danach parallel.
+async function processSource(expo, sourceText, sourceLabel, onChunkDone) {
+  const chunks = splitIntoChunks(sourceText, CHUNK_CHARS);
+  const perChunk = new Array(chunks.length).fill(null);
+  let brief = null;
+  let failedChunks = 0;
+  let lastError = '';
+
+  const handle = (i, data) => {
+    perChunk[i] = (data.entries || []).map(e => ({ ...e, quelle: sourceLabel }));
+  };
+  const fail = (i, err) => {
+    console.error(`Chunk-Fehler (${sourceLabel})`, i, err);
+    failedChunks++;
+    lastError = err.message || String(err);
+  };
+
+  try {
+    const data = await callAnalyze(buildPromptFirst(expo, chunks[0], chunks.length > 1));
+    brief = data;
+    handle(0, data);
+  } catch (e) { fail(0, e); }
+  onChunkDone();
+
+  const rest = chunks.map((c, i) => i).slice(1);
+  await runPool(rest, MAX_PARALLEL, async (i) => {
+    try {
+      const data = await callAnalyze(buildPromptNext(
+        expo, chunks[i],
+        brief?.leitfrage || expo.slice(0, 600),
+        brief?.erkannter_autor, brief?.erkanntes_jahr));
+      handle(i, data);
+    } catch (e) { fail(i, e); }
+    onChunkDone();
+  });
+
+  const entries = perChunk.flat().filter(Boolean); // Reihenfolge = Seitenreihenfolge
   return { brief, entries, chunkCount: chunks.length, failedChunks, sourceLabel, lastError };
 }
 
@@ -451,21 +480,25 @@ async function run() {
 let lastErr = '';
 
   try {
-    for (let s = 0; s < sources.length; s++) {
-      const source = sources[s];
-      const result = await processSource(expo, source.text, source.label, (chunkIdx, chunkTotal) => {
-        statusEl.textContent = `${source.label}: Abschnitt ${chunkIdx + 1} / ${chunkTotal} …`;
-        const overall = ((s + chunkIdx / chunkTotal) / sources.length) * 100;
-        progressBar.style.width = Math.round(overall) + '%';
-      });
+    const totalChunks = sources.reduce((n, src) => n + splitIntoChunks(src.text, CHUNK_CHARS).length, 0);
+    let doneChunks = 0;
+    const onChunkDone = () => {
+      doneChunks++;
+      statusEl.textContent = `Analysiere … ${doneChunks} / ${totalChunks} Abschnitte`;
+      progressBar.style.width = Math.round((doneChunks / totalChunks) * 100) + '%';
+    };
+    statusEl.textContent = `Analysiere … 0 / ${totalChunks} Abschnitte`;
 
+    const results = await Promise.all(sources.map(src => processSource(expo, src.text, src.label, onChunkDone)));
+
+    results.forEach((result, s) => {
       if (result.brief) {
-        allBriefs.push({ ...result.brief, sourceLabel: source.label, chunkCount: result.chunkCount });
+        allBriefs.push({ ...result.brief, sourceLabel: sources[s].label, chunkCount: result.chunkCount });
       }
       allEntries = allEntries.concat(result.entries);
       totalFailed += result.failedChunks;
-if (result.lastError) lastErr = result.lastError;
-    }
+      if (result.lastError) lastErr = result.lastError;
+    });
 
     progressBar.style.width = '100%';
 
