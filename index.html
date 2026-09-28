@@ -101,6 +101,42 @@ button.primary:disabled { opacity: 0.55; cursor: default; }
 .mapping ul { margin: 0; padding-left: 1.1rem; font-size: 0.88rem; line-height: 1.5; }
 .mapping a { color: var(--oxblood); }
 .map-src { color: var(--ink-soft); }
+.wrap { max-width: 900px; }
+details.hinweis { margin-top: 0.8rem; font-size: 0.85rem; }
+details.hinweis summary { cursor: pointer; color: var(--oxblood); }
+.row select.file-btn { padding: 0.65rem 0.8rem; }
+.brief2 { display: grid; grid-template-columns: max-content 1fr; gap: 0.25rem 1rem; background: var(--paper-raised);
+  border: 1px solid var(--line); border-left: 3px solid var(--oxblood); border-radius: 2px; padding: 0.8rem 1rem;
+  margin-bottom: 0.9rem; font-size: 0.88rem; line-height: 1.5; }
+.brief2 .k { color: var(--ink-soft); font-size: 0.78rem; padding-top: 0.1rem; }
+.brief2 .src { grid-column: 1 / -1; font-weight: 600; }
+.brief2 .warn { grid-column: 1 / -1; margin: 0.2rem 0 0; color: var(--oxblood); font-size: 0.82rem; }
+.toolbar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--paper);
+  padding: 0.6rem 0; border-bottom: 1px solid var(--line); margin-bottom: 1rem;
+  display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; align-items: center; }
+.count { font-size: 0.85rem; color: var(--ink-soft); }
+.chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.chip { background: none; border: 1px solid var(--line); color: var(--ink-soft); font: inherit; font-size: 0.78rem;
+  padding: 0.2rem 0.65rem; border-radius: 999px; cursor: pointer; }
+.chip:hover { border-color: var(--oxblood-soft); color: var(--oxblood); }
+.chip.active { background: var(--oxblood); border-color: var(--oxblood); color: #fdf9f3; }
+.mapping { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0.4rem 1.5rem; }
+.mapping h2 { grid-column: 1 / -1; }
+.entry { padding: 1rem 1.15rem; margin-bottom: 1rem; }
+.entry[hidden] { display: none; }
+.entry-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin-bottom: 0.35rem; }
+.entry-head .num { font-size: 0.78rem; color: var(--ink-soft); font-weight: 600; }
+.tag { font-size: 0.72rem; border: 1px solid var(--line); border-radius: 2px; padding: 0.05rem 0.45rem; color: var(--ink-soft); }
+.tag.stelle-tag { border-color: var(--oxblood-soft); color: var(--oxblood); }
+.entry h2 { font-size: 1.05rem; margin: 0 0 0.35rem; }
+.relevanz { margin: 0 0 0.8rem; }
+.tabs { display: flex; flex-wrap: wrap; gap: 0.25rem; border-bottom: 1px solid var(--line); margin-bottom: 0.7rem; }
+.tab { background: none; border: none; border-bottom: 2px solid transparent; margin-bottom: -1px; font: inherit;
+  font-size: 0.82rem; color: var(--ink-soft); padding: 0.4rem 0.7rem; cursor: pointer; }
+.tab:hover { color: var(--ink); }
+.tab.active { color: var(--oxblood); border-bottom-color: var(--oxblood); font-weight: 600; }
+.panel[hidden] { display: none; }
+@media (max-width: 620px) { .toolbar { position: static; } }
 </style>
 </head>
 <body>
@@ -109,7 +145,7 @@ button.primary:disabled { opacity: 0.55; cursor: default; }
     <p class="kicker">Schreibwerkstatt · Zitattechnik</p>
     <h1>Zitat-Werkstatt</h1>
     <p class="lede">Exposé und eine oder mehrere Literaturquellen hochladen. Das Tool verarbeitet jede Quelle vollständig (abschnittsweise) und ermittelt, welche Passagen für Ihre These relevant sind — zitierfertig im Harvard-Stil.</p>
-    <p class="criteria"><b>Gegen Patchwriting:</b> Die Paraphrasen übernehmen weder Satzbau noch Schlüsselvokabular des Originals. Autor und Jahr werden aus dem PDF erkannt, wo möglich — bitte vor Gebrauch gegenprüfen. Gescannte PDFs ohne eingebetteten Text werden automatisch per Texterkennung (OCR) gelesen.</p>
+    <details class="hinweis"><summary>Hinweise zur Methode</summary><p class="criteria"><b>Gegen Patchwriting:</b> Die Paraphrasen übernehmen weder Satzbau noch Schlüsselvokabular des Originals. Autor und Jahr werden aus dem PDF erkannt, wo möglich — bitte vor Gebrauch gegenprüfen. Gescannte PDFs ohne eingebetteten Text werden automatisch per Texterkennung (OCR) gelesen.</p></details>
   </header>
 
   <div class="sources">
@@ -305,25 +341,13 @@ function splitIntoChunks(text, maxChars) {
   return chunks;
 }
 
-function fieldBlock(label, text, isQuote) {
-  const id = 'f' + Math.random().toString(36).slice(2, 9);
-  return `<div class="field">
-    <p class="field-label">${label}</p>
-    <p class="field-text${isQuote ? ' quote' : ''}" id="${id}">${escapeHtml(text)}</p>
-    <div class="field-foot"><button class="copy-btn" data-target="${id}">Kopieren</button></div>
-  </div>`;
-}
-
 function renderBrief(briefs) {
   briefBox.innerHTML = briefs.map(b => `
-    <div class="brief">
-      ${briefs.length > 1 ? `<b>${escapeHtml(b.sourceLabel)}</b>` : ''}
-      <b>Leitfrage aus dem Exposé</b>
-      <p>${escapeHtml(b.leitfrage || '—')}</p>
-      <b>Erkannte Quelle</b>
-      <p>${escapeHtml([b.erkannter_autor, b.erkanntes_jahr].filter(Boolean).join(', ') || 'nicht sicher erkannt')}</p>
+    <div class="brief2">
+      ${briefs.length > 1 ? `<div class="src">${escapeHtml(b.sourceLabel)}</div>` : ''}
+      <span class="k">Leitfrage</span><span>${escapeHtml(b.leitfrage || '—')}</span>
+      <span class="k">Quelle</span><span>${escapeHtml([b.erkannter_autor, b.erkanntes_jahr].filter(Boolean).join(', ') || 'nicht sicher erkannt')}${b.chunkCount > 1 ? ` <span class="map-src">· ${b.chunkCount} Abschnitte analysiert</span>` : ''}</span>
       ${b.quellen_hinweis ? `<p class="warn">${escapeHtml(b.quellen_hinweis)}</p>` : ''}
-      ${b.chunkCount > 1 ? `<p style="margin-top:0.5rem;color:var(--ink-soft);font-size:0.78rem;">Literatur wurde in ${b.chunkCount} Abschnitten vollständig analysiert.</p>` : ''}
     </div>
   `).join('');
 }
@@ -353,35 +377,84 @@ function buildMapping(entries) {
     ).join('') + `</ul></div>`).join('') + `</section>`;
 }
 
-function renderEntries(entries, multiSource) {
-  resultsEl.innerHTML = buildMapping(entries) + entries.map((e, i) => `
-    <article class="entry" id="kern-${i + 1}">
-      <p class="entry-num">Kernaussage ${i + 1}${multiSource ? `<span class="badge">${escapeHtml(e.quelle)}</span>` : ''}</p>
-      <h2>${escapeHtml(e.kernargument)}</h2>
-    ${e.expose_stelle ? `<p class="stelle"><b>Passt zu:</b> ${escapeHtml(e.expose_stelle)}${e.einordnung ? ' — ' + escapeHtml(e.einordnung) : ''}</p>` : ''}
-      ${e.relevanz ? `<p class="relevanz">${escapeHtml(e.relevanz)}</p>` : ''}
-      ${fieldBlock('Direktes Zitat', e.direktes_zitat, true)}
-      ${fieldBlock('Indirektes Zitat (integrierend)', e.indirekt_integrierend, false)}
-      ${fieldBlock('Indirektes Zitat (nicht-integrierend)', e.indirekt_nicht_integrierend, false)}
-      <div class="field">
-        <p class="field-label">Zusammenfassung</p>
-        <p class="summary">${escapeHtml(e.zusammenfassung)}</p>
-      </div>
-    </article>
-  `).join('');
+let activeFilter = '';
+const tabState = {};
+const TABS = [
+  ['q', 'Direktes Zitat', 'direktes_zitat', true],
+  ['i', 'Integrierend', 'indirekt_integrierend', false],
+  ['n', 'Nicht-integrierend', 'indirekt_nicht_integrierend', false],
+  ['s', 'Zusammenfassung', 'zusammenfassung', false],
+];
+const stelleOf = e => (e.expose_stelle || '').trim() || 'Ohne Zuordnung';
 
-  resultsEl.querySelectorAll('.copy-btn').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const target = document.getElementById(btn.dataset.target);
-      try {
-        await navigator.clipboard.writeText(target.textContent);
-        btn.textContent = 'Kopiert';
-        btn.classList.add('done');
-        setTimeout(() => { btn.textContent = 'Kopieren'; btn.classList.remove('done'); }, 1600);
-      } catch { btn.textContent = 'Fehler'; }
-    });
-  });
+function applyFilter() {
+  resultsEl.querySelectorAll('.chip').forEach(c => c.classList.toggle('active', c.dataset.filter === activeFilter));
+  resultsEl.querySelectorAll('.entry').forEach(a => { a.hidden = !!activeFilter && a.dataset.stelle !== activeFilter; });
 }
+
+function renderEntries(entries, multiSource) {
+  const idx = k => { const j = exposeOutline.findIndex(o => o.trim().toLowerCase() === k.toLowerCase()); return j === -1 ? 999 : j; };
+  const keys = [...new Set(entries.map(stelleOf))].sort((a, b) => idx(a) - idx(b));
+  if (activeFilter && !keys.includes(activeFilter)) activeFilter = '';
+  const nSrc = new Set(entries.map(e => e.quelle)).size;
+
+  const toolbar = `<div class="toolbar"><span class="count">${entries.length} Kernaussage${entries.length === 1 ? '' : 'n'}${multiSource ? ` aus ${nSrc} Quellen` : ''}</span>` +
+    (entries.some(e => e.expose_stelle) ? `<div class="chips"><button type="button" class="chip" data-filter="">Alle</button>${keys.map(k => `<button type="button" class="chip" data-filter="${escapeHtml(k)}">${escapeHtml(k)}</button>`).join('')}</div>` : '') +
+    `</div>`;
+
+  const cards = entries.map((e, i) => {
+    const n = i + 1, active = tabState[n] || 'q';
+    const tabs = TABS.map(([id, label]) => `<button type="button" class="tab${id === active ? ' active' : ''}" role="tab" aria-selected="${id === active}" data-tab="${id}">${label}</button>`).join('');
+    const panels = TABS.map(([id, , key, isQ]) => {
+      const fid = `f${n}${id}`;
+      return `<div class="panel" data-panel="${id}" role="tabpanel"${id === active ? '' : ' hidden'}>
+        <p class="field-text${isQ ? ' quote' : ''}" id="${fid}">${escapeHtml(e[key])}</p>
+        <div class="field-foot"><button type="button" class="copy-btn" data-target="${fid}">Kopieren</button></div>
+      </div>`;
+    }).join('');
+    return `<article class="entry" id="kern-${n}" data-n="${n}" data-stelle="${escapeHtml(stelleOf(e))}">
+      <div class="entry-head">
+        <span class="num">#${n}</span>
+        ${multiSource ? `<span class="tag">${escapeHtml(e.quelle)}</span>` : ''}
+        ${e.expose_stelle ? `<span class="tag stelle-tag">→ ${escapeHtml(e.expose_stelle)}${e.einordnung ? ' · ' + escapeHtml(e.einordnung) : ''}</span>` : ''}
+      </div>
+      <h2>${escapeHtml(e.kernargument)}</h2>
+      ${e.relevanz ? `<p class="relevanz">${escapeHtml(e.relevanz)}</p>` : ''}
+      <div class="tabs" role="tablist">${tabs}</div>
+      ${panels}
+    </article>`;
+  }).join('');
+
+  resultsEl.innerHTML = toolbar + buildMapping(entries) + cards;
+  applyFilter();
+}
+
+// Ein einziger Klick-Handler für Filter, Reiter, Kopieren und Sprunglinks
+resultsEl.addEventListener('click', async (ev) => {
+  const link = ev.target.closest('a[href^="#kern-"]');
+  if (link && activeFilter) { activeFilter = ''; applyFilter(); return; }
+
+  const chip = ev.target.closest('.chip');
+  if (chip) { activeFilter = chip.dataset.filter; applyFilter(); return; }
+
+  const tab = ev.target.closest('.tab');
+  if (tab) {
+    const art = tab.closest('.entry'), id = tab.dataset.tab;
+    tabState[art.dataset.n] = id;
+    art.querySelectorAll('.tab').forEach(t => { const on = t === tab; t.classList.toggle('active', on); t.setAttribute('aria-selected', on); });
+    art.querySelectorAll('.panel').forEach(p => { p.hidden = p.dataset.panel !== id; });
+    return;
+  }
+
+  const btn = ev.target.closest('.copy-btn');
+  if (btn) {
+    try {
+      await navigator.clipboard.writeText(document.getElementById(btn.dataset.target).textContent);
+      btn.textContent = 'Kopiert'; btn.classList.add('done');
+      setTimeout(() => { btn.textContent = 'Kopieren'; btn.classList.remove('done'); }, 1600);
+    } catch { btn.textContent = 'Fehler'; }
+  }
+});
 
 function buildPromptFirst(expo, chunk, multiPart) {
   return `Du bist ein wissenschaftlicher Schreibassistent nach den Kriterien des Schreibzentrums der Universität Frankfurt am Main. Du arbeitest mit Harvard-Zitierweise (Kurzbeleg im Text: Nachname Jahr: Seite).
@@ -518,6 +591,7 @@ async function run() {
     .filter(s => s.text.length > 0);
 
   errorBox.innerHTML = ''; briefBox.innerHTML = ''; resultsEl.innerHTML = '';
+  activeFilter = ''; Object.keys(tabState).forEach(k => delete tabState[k]);
 
   if (!expo || sources.length === 0) {
     errorBox.innerHTML = '<div class="error">Bitte Exposé und mindestens eine Literaturquelle hochladen oder einfügen.</div>';
