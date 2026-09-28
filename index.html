@@ -93,6 +93,14 @@ button.primary:disabled { opacity: 0.55; cursor: default; }
 .copy-btn:hover { border-color: var(--oxblood-soft); color: var(--oxblood); }
 .copy-btn.done { border-color: var(--ok); color: var(--ok); }
 .summary { color: var(--ink-soft); font-size: 0.92rem; }
+.stelle { font-size: 0.86rem; color: var(--oxblood); margin: 0 0 0.6rem; }
+.mapping { background: var(--paper-raised); border: 1px solid var(--line); border-left: 3px solid var(--ok); border-radius: 2px; padding: 1rem 1.15rem; margin-bottom: 1.5rem; }
+.mapping h2 { font-family: "Source Serif 4", Georgia, serif; font-size: 1.05rem; margin: 0 0 0.6rem; }
+.map-group { margin-bottom: 0.7rem; }
+.map-stelle { font-weight: 600; font-size: 0.9rem; margin: 0 0 0.2rem; }
+.mapping ul { margin: 0; padding-left: 1.1rem; font-size: 0.88rem; line-height: 1.5; }
+.mapping a { color: var(--oxblood); }
+.map-src { color: var(--ink-soft); }
 </style>
 </head>
 <body>
@@ -320,11 +328,37 @@ function renderBrief(briefs) {
   `).join('');
 }
 
+let exposeOutline = [];
+
+function pageOf(e) {
+  const m = String(e.direktes_zitat || '').match(/S\.\s*(\d+(?:\s*[–-]\s*\d+)?)/);
+  return m ? m[1] : '';
+}
+
+// Übersicht: welcher Beleg passt an welche Stelle des Exposés
+function buildMapping(entries) {
+  if (!entries.some(e => e.expose_stelle)) return '';
+  const groups = new Map();
+  entries.forEach((e, i) => {
+    const k = (e.expose_stelle || 'Ohne Zuordnung').trim();
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push({ e, i });
+  });
+  const idx = k => { const j = exposeOutline.findIndex(o => o.trim().toLowerCase() === k.toLowerCase()); return j === -1 ? 999 : j; };
+  const keys = [...groups.keys()].sort((a, b) => idx(a) - idx(b));
+  return `<section class="mapping"><h2>Zuordnung zum Exposé</h2>` + keys.map(k =>
+    `<div class="map-group"><p class="map-stelle">${escapeHtml(k)}</p><ul>` +
+    groups.get(k).map(({ e, i }) =>
+      `<li><a href="#kern-${i + 1}">Kernaussage ${i + 1}</a>: ${escapeHtml(e.kernargument)} <span class="map-src">(${escapeHtml(e.quelle || '')}${pageOf(e) ? ', S. ' + escapeHtml(pageOf(e)) : ''})</span></li>`
+    ).join('') + `</ul></div>`).join('') + `</section>`;
+}
+
 function renderEntries(entries, multiSource) {
-  resultsEl.innerHTML = entries.map((e, i) => `
-    <article class="entry">
+  resultsEl.innerHTML = buildMapping(entries) + entries.map((e, i) => `
+    <article class="entry" id="kern-${i + 1}">
       <p class="entry-num">Kernaussage ${i + 1}${multiSource ? `<span class="badge">${escapeHtml(e.quelle)}</span>` : ''}</p>
       <h2>${escapeHtml(e.kernargument)}</h2>
+    ${e.expose_stelle ? `<p class="stelle"><b>Passt zu:</b> ${escapeHtml(e.expose_stelle)}${e.einordnung ? ' — ' + escapeHtml(e.einordnung) : ''}</p>` : ''}
       ${e.relevanz ? `<p class="relevanz">${escapeHtml(e.relevanz)}</p>` : ''}
       ${fieldBlock('Direktes Zitat', e.direktes_zitat, true)}
       ${fieldBlock('Indirektes Zitat (integrierend)', e.indirekt_integrierend, false)}
@@ -363,11 +397,15 @@ ${chunk}
 """
 
 Aufgabe:
-1. Fasse die Leitfrage/These des Exposés in einem Satz zusammen (Feld "leitfrage").
+1. Fasse die Leitfrage/These des Exposés in einem Satz zusammen (Feld "leitfrage"). Liste außerdem die Gliederungspunkte/Kapitel des Exposés in ihrer Reihenfolge (Feld "gliederung", kurze Bezeichnungen wie im Exposé, z.B. "2.1 Begriffsklärung"); wenn keine Gliederung erkennbar ist: ["These","Forschungsfrage"].
 2. Versuche, Nachname des Autors/der Autorin und Erscheinungsjahr aus dem Literaturtext zu erkennen (Titelseite, Kopfzeile, Selbstverweis o.ä.). Wenn unsicher: Felder leer lassen und in "quellen_hinweis" kurz erklären, dass die Angaben manuell zu ergänzen sind.
 3. Wähle NUR die Passagen aus diesem Abschnitt aus, die inhaltlich tatsächlich relevant für die Leitfrage des Exposés sind — ignoriere thematisch abseitige Passagen. Wenn nichts relevant ist, gib ein leeres "entries"-Array zurück. Maximal 4 Kernaussagen pro Abschnitt.
 4. Erstelle für jede ausgewählte Kernaussage:
 - kernargument: Kurzbezeichnung, wofür/für welches Kapitel der Hausarbeit relevant.
+- expose_stelle: die Stelle im Exposé, an der dieser Beleg eingesetzt werden sollte — exakt eine Bezeichnung aus "gliederung" (bei fehlender Gliederung: "These" oder "Forschungsfrage").
+
+- einordnung: sehr kurz (max. 8 Wörter), wie der Beleg dort verwendet werden kann (z.B. "stützt die These", "Definition", "Gegenposition", "Beispiel").
+
 - relevanz: ein Satz, warum diese Aussage die These/Leitfrage des Exposés stützt oder für sie relevant ist.
 - direktes_zitat: wortgenaue Wiedergabe in Anführungszeichen, am Ende im Harvard-Stil "(Nachname Jahr: S. X)" mit der Seitenzahl aus dem nächstgelegenen [Seite N]-Marker; falls Autor/Jahr unsicher, Platzhalter "([Autor] [Jahr]: S. X)" verwenden.
 - indirekt_integrierend: eine sprachlich eigenständige Paraphrase (andere Satzstruktur, nicht nur Synonyme) mit Autor aktiv im Satz, z.B. "Nachname (Jahr) argumentiert, dass …". Verhindere Patchwriting konsequent.
@@ -375,13 +413,16 @@ Aufgabe:
 - zusammenfassung: ein kurzer Satz zum größeren Zusammenhang dieser Textpassage.
 
 Antworte AUSSCHLIESSLICH mit einem JSON-Objekt (keine Markdown-Codeblöcke, kein Fließtext davor oder danach) in dieser Form:
-{"leitfrage":"...","erkannter_autor":"...","erkanntes_jahr":"...","quellen_hinweis":"...","entries":[{"kernargument":"...","relevanz":"...","direktes_zitat":"...","indirekt_integrierend":"...","indirekt_nicht_integrierend":"...","zusammenfassung":"..."}]}`;
+{"leitfrage":"...","erkannter_autor":"...","erkanntes_jahr":"...","quellen_hinweis":"...","gliederung":["..."],"entries":[{"kernargument":"...","expose_stelle":"...","einordnung":"...","relevanz":"...","direktes_zitat":"...","indirekt_integrierend":"...","indirekt_nicht_integrierend":"...","zusammenfassung":"..."}]}`;
 }
 
-function buildPromptNext(expo, chunk, leitfrage, autor, jahr) {
+function buildPromptNext(expo, chunk, leitfrage, autor, jahr, gliederung) {
+  const gl = Array.isArray(gliederung) && gliederung.length ? gliederung.join(' | ') : '(nicht erkannt) Exposé-Anfang: ' + String(expo).slice(0, 1500);
   return `Du setzt die Analyse eines längeren Literaturtextes fort (weiterer Abschnitt desselben Textes). Arbeite mit Harvard-Zitierweise.
 
 LEITFRAGE DES EXPOSÉS: ${leitfrage}
+
+GLIEDERUNG DES EXPOSÉS: ${gl}
 BEKANNTE QUELLENANGABE: ${autor ? autor : '[Autor]'}, ${jahr ? jahr : '[Jahr]'}
 
 WEITERER LITERATURABSCHNITT (Seiten mit "[Seite N]" markiert):
@@ -389,9 +430,9 @@ WEITERER LITERATURABSCHNITT (Seiten mit "[Seite N]" markiert):
 ${chunk}
 """
 
-Wähle NUR Passagen aus diesem Abschnitt, die inhaltlich relevant für die obige Leitfrage sind — ignoriere thematisch abseitige Passagen. Wenn nichts relevant ist, gib ein leeres "entries"-Array zurück. Maximal 4 Kernaussagen pro Abschnitt. Erstelle für jede relevante Kernaussage dieselben Felder wie zuvor: kernargument, relevanz, direktes_zitat (Harvard-Stil mit Seitenzahl aus [Seite N]), indirekt_integrierend (eigenständige Paraphrase, Autor aktiv im Satz), indirekt_nicht_integrierend (eigenständige Paraphrase, Quelle in Klammern am Satzende), zusammenfassung. Kein Patchwriting — echte, eigenständige Umformulierung.
+Wähle NUR Passagen aus diesem Abschnitt, die inhaltlich relevant für die obige Leitfrage sind — ignoriere thematisch abseitige Passagen. Wenn nichts relevant ist, gib ein leeres "entries"-Array zurück. Maximal 4 Kernaussagen pro Abschnitt. Erstelle für jede relevante Kernaussage dieselben Felder wie zuvor: kernargument, expose_stelle (exakt eine Bezeichnung aus der GLIEDERUNG), einordnung (max. 8 Wörter), relevanz, direktes_zitat (Harvard-Stil mit Seitenzahl aus [Seite N]), indirekt_integrierend (eigenständige Paraphrase, Autor aktiv im Satz), indirekt_nicht_integrierend (eigenständige Paraphrase, Quelle in Klammern am Satzende), zusammenfassung. Kein Patchwriting — echte, eigenständige Umformulierung.
 
-Antworte AUSSCHLIESSLICH mit einem JSON-Objekt: {"entries":[{"kernargument":"...","relevanz":"...","direktes_zitat":"...","indirekt_integrierend":"...","indirekt_nicht_integrierend":"...","zusammenfassung":"..."}]}`;
+Antworte AUSSCHLIESSLICH mit einem JSON-Objekt: {"entries":[{"kernargument":"...","expose_stelle":"...","einordnung":"...","relevanz":"...","direktes_zitat":"...","indirekt_integrierend":"...","indirekt_nicht_integrierend":"...","zusammenfassung":"..."}]}`;
 }
 
 // ---------- Aufruf der eigenen Server-API statt window.claude ----------
@@ -456,7 +497,7 @@ async function processSource(expo, sourceText, sourceLabel, onChunkDone, onParti
       const data = await callAnalyze(buildPromptNext(
         expo, chunks[i],
         brief?.leitfrage || expo.slice(0, 600),
-        brief?.erkannter_autor, brief?.erkanntes_jahr));
+        brief?.erkannter_autor, brief?.erkanntes_jahr, brief?.gliederung));
       handle(i, data);
     } catch (e) { fail(i, e); }
     onChunkDone();
@@ -505,6 +546,7 @@ let lastErr = '';
     const refresh = () => {
       const briefs = partial.map((pt, s) => pt.brief ? { ...pt.brief, sourceLabel: sources[s].label, chunkCount: pt.chunkCount } : null).filter(Boolean);
       const entries = partial.flatMap(pt => pt.entries);
+      exposeOutline = briefs.flatMap(b => Array.isArray(b.gliederung) ? b.gliederung : []);
       if (briefs.length) renderBrief(briefs);
       if (entries.length) renderEntries(entries, sources.length > 1);
     };
