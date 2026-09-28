@@ -146,15 +146,51 @@ a:focus-visible { outline: 2px solid var(--walnut-mid); outline-offset: 3px; bor
 }
 
 /* ---------- Legend ---------- */
-.legend { background: var(--walnut); color: var(--sand); padding: 6rem 1.5rem; }
-.legend-inner { max-width: 720px; margin: 0 auto; text-align: center; }
-.legend .eyebrow { color: #c7ad8a; }
+.legend {
+  position: relative; overflow: hidden;
+  padding: 9rem 1.5rem 12rem;
+  color: var(--walnut);
+  background: linear-gradient(180deg,
+    #e4d6bd 0%, #ddcdaf 28%, #d9d3b8 50%, #cfdcce 72%, #bcd8d2 100%);
+}
+/* Sand ripples hanging from the section above; they flow into the sea below. */
+.legend::before,
+.legend::after {
+  content: ""; position: absolute; left: 0; right: 0; pointer-events: none;
+  background-repeat: repeat-x;
+}
+.legend::before {
+  top: 0; height: 110px;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1400 100' preserveAspectRatio='none'%3E%3Cpath d='M0 0H1400V50Q1050 90 700 50T0 50Z' fill='%23f1e8d8'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1000 100' preserveAspectRatio='none'%3E%3Cpath d='M0 0H1000V55Q750 95 500 55T0 55Z' fill='%23ebdfc9'/%3E%3C/svg%3E");
+  background-size: 1400px 70px, 1000px 110px;
+  background-position: 0 0, -260px 0;
+}
+.legend::after {
+  bottom: 0; height: 150px;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 100' preserveAspectRatio='none'%3E%3Cpath d='M0 50Q150 15 300 50T600 50T900 50T1200 50V100H0Z' fill='%232f6b74'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 100' preserveAspectRatio='none'%3E%3Cpath d='M0 50Q150 15 300 50T600 50T900 50T1200 50V100H0Z' fill='%234f8f95'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 100' preserveAspectRatio='none'%3E%3Cpath d='M0 50Q150 15 300 50T600 50T900 50T1200 50V100H0Z' fill='%2388bcb8'/%3E%3C/svg%3E");
+  background-size: 900px 70px, 1200px 105px, 1500px 150px;
+  background-position: 0 100%, -300px 100%, -700px 100%;
+  animation: legend-tide 22s linear infinite;
+}
+@keyframes legend-tide {
+  to { background-position: 900px 100%, -1500px 100%, 800px 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .legend::after { animation: none; }
+}
+.legend-inner { position: relative; z-index: 1; max-width: 720px; margin: 0 auto; text-align: center; }
+.legend .eyebrow { color: var(--ember); }
 .legend h2 { margin-bottom: 1.5rem; }
 .legend p:not(.eyebrow) {
-  margin: 0 auto 2.5rem; color: #dcc9ad; font-size: 1.08rem; text-wrap: pretty;
+  margin: 0 auto 1.5rem; color: var(--walnut-mid); font-size: 1.08rem; text-wrap: pretty;
 }
-.legend .btn-primary { background: var(--sand); color: var(--walnut); }
-.legend .btn-primary:hover { background: var(--sand-light); }
+.legend p:last-of-type { margin-bottom: 2.5rem; }
+.legend em { font-family: var(--serif); font-size: 1.2rem; color: var(--walnut); }
 
 /* ---------- Footer ---------- */
 .foot {
