@@ -1,0 +1,1143 @@
+diff --git a/.gitignore b/.gitignore
+index 4d901dc..fa4a02e 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -1,3 +1,5 @@
+ .env.local
+ .vercel
+ .env*
++node_modules/
++.DS_Store
+diff --git a/LICENSE b/LICENSE
+new file mode 100644
+index 0000000..51de660
+--- /dev/null
++++ b/LICENSE
+@@ -0,0 +1,21 @@
++MIT License
++
++Copyright (c) 2026 avis097
++
++Permission is hereby granted, free of charge, to any person obtaining a copy
++of this software and associated documentation files (the "Software"), to deal
++in the Software without restriction, including without limitation the rights
++to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
++copies of the Software, and to permit persons to whom the Software is
++furnished to do so, subject to the following conditions:
++
++The above copyright notice and this permission notice shall be included in all
++copies or substantial portions of the Software.
++
++THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
++IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
++FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
++AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
++LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
++OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
++SOFTWARE.
+diff --git a/README.md b/README.md
+index 44e2179..9808138 100644
+--- a/README.md
++++ b/README.md
+@@ -32,21 +32,26 @@ The application is lightweight, performant, and deliberately avoids complex buil
+ ```text
+ beleg-improved/
+ ├── api/
+-│   └── analyze.js       # Vercel Serverless Function (Anthropic SDK integration)
++│   ├── analyze.js       # Vercel Serverless Function (Anthropic Messages API via fetch)
++│   ├── _prompts.js      # Prompt-Vorlagen (nur serverseitig)
++│   ├── _verify.js       # Prüfung direkter Zitate gegen den Quelltext
++│   └── _ratelimit.js    # Rate-Limit pro IP (optional mit Upstash)
+ ├── images/              # Assets & UI screen designs
+ ├── index.html           # Main application interface
+ ├── werkstatt.html       # Writing & revision workshop
+ ├── matrix.js            # Comparison & matrix analysis logic
+-├── matrix-addon.js      # Advanced matrix visualizer addons
+ ├── app.js               # Frontend application state & event handling
+ ├── styles.css           # Core styling
+ ├── landing.css          # Landing page & hero layouts
++├── test/                # Tests (npm test)
+ ├── vercel.json          # Deployment & routing configuration
+-└── package.json         # Serverless dependencies (@anthropic-ai/sdk)
++├── package.json         # Projektmetadaten, keine Laufzeit-Abhängigkeiten
++├── LICENSE              # MIT
++└── SECURITY.md          # Hinweise zum Melden von Sicherheitslücken
+ ```
+ 
+ - **Frontend:** Pure HTML5, modern CSS3, and Vanilla JavaScript (zero bundlers — no Webpack or Vite required).
+-- **Backend / API:** Vercel Serverless Function (`api/analyze.js`), handling requests securely server-side via `@anthropic-ai/sdk` without exposing API keys to client browsers.
++- **Backend / API:** Vercel Serverless Function (`api/analyze.js`), calling the Anthropic API server-side (plain `fetch`, no SDK) without exposing API keys to client browsers.
+ 
+ ---
+ 
+@@ -96,9 +101,37 @@ Developed for academic applications and university research support at **Goethe
+ > *"Patchwriting is restating a phrase, clause, or one or two sentences in a paragraph with slightly different language from the source."*  
+ > This tool fosters authentic academic voice, source transparency, and rigorous citation integrity.
+ 
++## Konfiguration & Schutz der API
++
++Der Server baut die Prompts selbst (`api/_prompts.js`). Das Frontend schickt nur Rohtexte
++(`kind`: `first`, `next` oder `matrix`). Eingabelängen sind begrenzt, Modell und `max_tokens`
++werden ausschließlich serverseitig festgelegt. Ein freier `prompt` wird abgelehnt.
++
++| Umgebungsvariable | Zweck | Standard |
++| --- | --- | --- |
++| `ANTHROPIC_API_KEY` | API-Key (Pflicht) | – |
++| `ANTHROPIC_MODEL` | Modell für „Genau“ | `claude-sonnet-5-5` |
++| `ANTHROPIC_MODEL_FAST` | Modell für „Schnell“ | `claude-haiku-4-5-20251001` |
++| `ACCESS_CODE` | Optionaler Zugangscode; das Frontend fragt einmal pro Sitzung danach | aus |
++| `RATE_LIMIT_MAX` / `RATE_LIMIT_WINDOW_S` | Anfragen pro IP und Zeitfenster | 150 / 600 s |
++| `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | Gemeinsamer Zähler über alle Instanzen | aus |
++
++Ohne Upstash zählt das Rate-Limit pro Serverless-Instanz im Speicher (Best-Effort). Für einen
++verlässlichen Schutz Upstash anbinden und/oder `ACCESS_CODE` setzen. Bei 429/5xx von Anthropic
++wiederholt der Server mit exponentiellem Backoff und beachtet `retry-after`.
++
++## Zitatprüfung
++
++Der Server prüft jedes direkte Zitat gegen den analysierten Textabschnitt (nur Buchstaben und Ziffern,
++ohne Silbentrennung, Zeilenumbrüche und Satzzeichen; Auslassungen `[…]` trennen das Zitat in Teile).
++Ergebnis pro Beleg: ✓ gefunden (mit PDF-Seite), ⚠ nur teilweise, ⚠ nicht gefunden oder Seitenabweichung.
++Grenzen: Seitenzahlen sind PDF-Seiten, keine gedruckten Seiten. Kopf-/Fußzeilen oder Seitenzahlen
++mitten im Zitat können zu einer Warnung führen. Die Prüfung ersetzt nicht den Blick ins Original.
++
++Tests: `npm test` (benötigt Node ≥ 18, keine Abhängigkeiten).
++
+ ---
+ 
+ ## 📄 License
+ 
+ This project is licensed under the [MIT License](LICENSE).
+-
+diff --git a/SECURITY.md b/SECURITY.md
+index 034e848..1adcbdb 100644
+--- a/SECURITY.md
++++ b/SECURITY.md
+@@ -1,21 +1,22 @@
+ # Security Policy
+ 
+-## Supported Versions
++## Unterstützte Versionen
+ 
+-Use this section to tell people about which versions of your project are
+-currently being supported with security updates.
++Sicherheitsupdates gibt es nur für den aktuellen Stand des Branches `main`
++(derzeit Version 1.2.x).
+ 
+-| Version | Supported          |
+-| ------- | ------------------ |
+-| 5.1.x   | :white_check_mark: |
+-| 5.0.x   | :x:                |
+-| 4.0.x   | :white_check_mark: |
+-| < 4.0   | :x:                |
++## Sicherheitslücke melden
+ 
+-## Reporting a Vulnerability
++Bitte melde Sicherheitslücken **nicht** als öffentliches Issue, sondern vertraulich über
++GitHub: Reiter **Security → Report a vulnerability** in diesem Repository
++(„Private vulnerability reporting“).
+ 
+-Use this section to tell people how to report a vulnerability.
++Beschreibe kurz, was betroffen ist und wie sich das Problem nachvollziehen lässt.
++Ich melde mich in der Regel innerhalb weniger Tage. Bestätigte Lücken werden
++behoben und im Commit-Verlauf vermerkt.
+ 
+-Tell them where to go, how often they can expect to get an update on a
+-reported vulnerability, what to expect if the vulnerability is accepted or
+-declined, etc.
++## Hinweise für den Betrieb
++
++- `ANTHROPIC_API_KEY` ausschließlich als Umgebungsvariable in Vercel setzen, nie ins Repository.
++- Für öffentliche Deployments `ACCESS_CODE` und ein Rate-Limit (siehe README) aktivieren,
++  damit der Endpunkt `/api/analyze` nicht missbraucht werden kann.
+diff --git a/api/_prompts.js b/api/_prompts.js
+new file mode 100644
+index 0000000..a31c70b
+--- /dev/null
++++ b/api/_prompts.js
+@@ -0,0 +1,78 @@
++// Prompt-Vorlagen. Sie laufen ausschließlich serverseitig: Der Client schickt nur Rohdaten,
++// dadurch kann /api/analyze nicht als freier Claude-Proxy missbraucht werden.
++// (Unterstrich-Präfix: Vercel behandelt die Datei nicht als eigenen Endpunkt.)
++
++function buildPromptFirst(expo, chunk, multiPart) {
++  return `Du bist ein wissenschaftlicher Schreibassistent nach den Kriterien des Schreibzentrums der Universität Frankfurt am Main. Du arbeitest mit Harvard-Zitierweise (Kurzbeleg im Text: Nachname Jahr: Seite).
++
++EXPOSÉ (enthält These/Forschungsfrage/Kapitelstruktur der Hausarbeit):
++"""
++${expo}
++"""
++
++LITERATUR${multiPart ? ' (erster Abschnitt eines längeren Textes; Seiten sind mit "[Seite N]" markiert)' : ' (Seiten sind mit "[Seite N]" markiert)'}:
++"""
++${chunk}
++"""
++
++Aufgabe:
++1. Fasse die Leitfrage/These des Exposés in einem Satz zusammen (Feld "leitfrage"). Liste außerdem die Gliederungspunkte/Kapitel des Exposés in ihrer Reihenfolge (Feld "gliederung", kurze Bezeichnungen wie im Exposé, z.B. "2.1 Begriffsklärung"); wenn keine Gliederung erkennbar ist: ["These","Forschungsfrage"].
++2. Versuche, Nachname des Autors/der Autorin und Erscheinungsjahr aus dem Literaturtext zu erkennen (Titelseite, Kopfzeile, Selbstverweis o.ä.). Wenn unsicher: Felder leer lassen und in "quellen_hinweis" kurz erklären, dass die Angaben manuell zu ergänzen sind.
++3. Wähle NUR die Passagen aus diesem Abschnitt aus, die inhaltlich tatsächlich relevant für die Leitfrage des Exposés sind — ignoriere thematisch abseitige Passagen. Wenn nichts relevant ist, gib ein leeres "entries"-Array zurück. Maximal 4 Kernaussagen pro Abschnitt.
++4. Erstelle für jede ausgewählte Kernaussage:
++- kernargument: Kurzbezeichnung, wofür/für welches Kapitel der Hausarbeit relevant.
++- expose_stelle: die Stelle im Exposé, an der dieser Beleg eingesetzt werden sollte — exakt eine Bezeichnung aus "gliederung" (bei fehlender Gliederung: "These" oder "Forschungsfrage").
++
++- einordnung: sehr kurz (max. 8 Wörter), wie der Beleg dort verwendet werden kann (z.B. "stützt die These", "Definition", "Gegenposition", "Beispiel").
++
++- relevanz: ein Satz, warum diese Aussage die These/Leitfrage des Exposés stützt oder für sie relevant ist.
++- direktes_zitat: wortgenaue Wiedergabe in Anführungszeichen, am Ende im Harvard-Stil "(Nachname Jahr: S. X)" mit der Seitenzahl aus dem nächstgelegenen [Seite N]-Marker; falls Autor/Jahr unsicher, Platzhalter "([Autor] [Jahr]: S. X)" verwenden.
++- indirekt_integrierend: eine sprachlich eigenständige Paraphrase (andere Satzstruktur, nicht nur Synonyme) mit Autor aktiv im Satz, z.B. "Nachname (Jahr) argumentiert, dass …". Verhindere Patchwriting konsequent.
++- indirekt_nicht_integrierend: eine weitere, unabhängig formulierte Paraphrase mit Fokus auf dem Fakt, Quelle in Klammern am Satzende im Harvard-Stil, z.B. "… (vgl. Nachname Jahr: S. X)."
++- zusammenfassung: ein kurzer Satz zum größeren Zusammenhang dieser Textpassage.
++
++Antworte AUSSCHLIESSLICH mit einem JSON-Objekt (keine Markdown-Codeblöcke, kein Fließtext davor oder danach) in dieser Form:
++{"leitfrage":"...","erkannter_autor":"...","erkanntes_jahr":"...","quellen_hinweis":"...","gliederung":["..."],"entries":[{"kernargument":"...","expose_stelle":"...","einordnung":"...","relevanz":"...","direktes_zitat":"...","indirekt_integrierend":"...","indirekt_nicht_integrierend":"...","zusammenfassung":"..."}]}`;
++}
++
++function buildPromptNext(expo, chunk, leitfrage, autor, jahr, gliederung) {
++  const gl = Array.isArray(gliederung) && gliederung.length ? gliederung.join(' | ') : '(nicht erkannt) Exposé-Anfang: ' + String(expo).slice(0, 1500);
++  return `Du setzt die Analyse eines längeren Literaturtextes fort (weiterer Abschnitt desselben Textes). Arbeite mit Harvard-Zitierweise.
++
++LEITFRAGE DES EXPOSÉS: ${leitfrage}
++
++GLIEDERUNG DES EXPOSÉS: ${gl}
++BEKANNTE QUELLENANGABE: ${autor ? autor : '[Autor]'}, ${jahr ? jahr : '[Jahr]'}
++
++WEITERER LITERATURABSCHNITT (Seiten mit "[Seite N]" markiert):
++"""
++${chunk}
++"""
++
++Wähle NUR Passagen aus diesem Abschnitt, die inhaltlich relevant für die obige Leitfrage sind — ignoriere thematisch abseitige Passagen. Wenn nichts relevant ist, gib ein leeres "entries"-Array zurück. Maximal 4 Kernaussagen pro Abschnitt. Erstelle für jede relevante Kernaussage dieselben Felder wie zuvor: kernargument, expose_stelle (exakt eine Bezeichnung aus der GLIEDERUNG), einordnung (max. 8 Wörter), relevanz, direktes_zitat (Harvard-Stil mit Seitenzahl aus [Seite N]), indirekt_integrierend (eigenständige Paraphrase, Autor aktiv im Satz), indirekt_nicht_integrierend (eigenständige Paraphrase, Quelle in Klammern am Satzende), zusammenfassung. Kein Patchwriting — echte, eigenständige Umformulierung.
++
++Antworte AUSSCHLIESSLICH mit einem JSON-Objekt: {"entries":[{"kernargument":"...","expose_stelle":"...","einordnung":"...","relevanz":"...","direktes_zitat":"...","indirekt_integrierend":"...","indirekt_nicht_integrierend":"...","zusammenfassung":"..."}]}`;
++}
++
++function buildPromptMatrix(items, outline, leitfrage, empirieDef) {
++  return `Du hilfst bei einer Hausarbeit. Grundlage ist ausschließlich die folgende Zitat-Werkstatt (Belege aus der Literatur).
++
++FORSCHUNGSFRAGE: ${leitfrage}
++
++KAPITEL (feste Gliederung, nicht verändern):
++${outline.map(k => '- ' + k).join('\n')}
++
++BELEGE (JSON):
++${JSON.stringify(items)}
++
++AUFGABE: Fasse die Belege zu Zeilen einer Schreibmatrix zusammen.
++- kapitel: exakt eine Bezeichnung aus der Kapitelliste (die des Belegs; bei zusammengeführten Belegen dieselbe).
++- argument: zentrales Argument, kurz und präzise (max. 25 Wörter), so formuliert, dass es direkt Grundlage für einen Absatz sein kann.
++- ids: Nummern der Belege, die diese Zeile stützen. Führe nur Belege zusammen, die im selben Kapitel dasselbe Argument stützen. Jeder Beleg gehört genau einer Zeile an.
++- empirisch: true nur, wenn der Beleg ${empirieDef} belegt; false bei rein theoretischen/konzeptionellen Aussagen.
++- Nutze nur die Belege oben, erfinde nichts. Für die Forschungsfrage relevanteste Belege zuerst.
++
++Antworte ausschließlich mit JSON: {"zeilen":[{"kapitel":"...","argument":"...","ids":[1],"empirisch":false}]}`;
++}
++
++module.exports = { buildPromptFirst, buildPromptNext, buildPromptMatrix };
+diff --git a/api/_ratelimit.js b/api/_ratelimit.js
+new file mode 100644
+index 0000000..4618590
+--- /dev/null
++++ b/api/_ratelimit.js
+@@ -0,0 +1,52 @@
++// Einfaches Rate-Limit pro IP und Zeitfenster.
++// Mit UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN wird ein gemeinsamer Zähler über alle
++// Serverless-Instanzen genutzt. Ohne Upstash gilt ein Zähler im Speicher der jeweiligen Instanz
++// (Best-Effort: bremst Missbrauch, ist aber kein harter Schutz).
++
++const mem = new Map();
++
++function clientIp(req) {
++  const xf = req.headers && (req.headers["x-forwarded-for"] || req.headers["x-real-ip"]);
++  if (xf) return String(xf).split(",")[0].trim();
++  return (req.socket && req.socket.remoteAddress) || "unknown";
++}
++
++async function checkRateLimit(req) {
++  const max = Number(process.env.RATE_LIMIT_MAX) || 150;
++  const windowS = Number(process.env.RATE_LIMIT_WINDOW_S) || 600;
++  const nowS = Date.now() / 1000;
++  const bucket = Math.floor(nowS / windowS);
++  const retryAfter = Math.max(1, Math.ceil(windowS - (nowS % windowS)));
++  const key = `zw:rl:${clientIp(req)}:${bucket}`;
++
++  let count;
++  const url = process.env.UPSTASH_REDIS_REST_URL;
++  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
++  if (url && token) {
++    try {
++      const r = await fetch(`${url}/pipeline`, {
++        method: "POST",
++        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
++        body: JSON.stringify([["INCR", key], ["EXPIRE", key, windowS * 2]]),
++        signal: AbortSignal.timeout(2000),
++      });
++      const out = await r.json();
++      const n = Number(out && out[0] && out[0].result);
++      if (Number.isFinite(n)) count = n;
++    } catch (e) {
++      console.error("Rate-Limit via Upstash fehlgeschlagen, nutze Speicher:", e.message);
++    }
++  }
++
++  if (count === undefined) {
++    count = (mem.get(key) || 0) + 1;
++    mem.set(key, count);
++    if (mem.size > 5000) {
++      for (const k of mem.keys()) if (!k.endsWith(`:${bucket}`)) mem.delete(k);
++    }
++  }
++
++  return { ok: count <= max, limit: max, remaining: Math.max(0, max - count), retryAfter };
++}
++
++module.exports = { checkRateLimit, clientIp };
+diff --git a/api/_verify.js b/api/_verify.js
+new file mode 100644
+index 0000000..9acaf3b
+--- /dev/null
++++ b/api/_verify.js
+@@ -0,0 +1,65 @@
++// Prüft, ob direkte Zitate wörtlich im analysierten Textabschnitt stehen.
++// Verglichen wird nur Buchstaben/Ziffern in Kleinschreibung. Dadurch spielen Silbentrennung am
++// Zeilenende, Zeilenumbrüche, Anführungszeichen und Interpunktion keine Rolle.
++
++const MIN_SEGMENT = 10; // kürzere Zitatteile sind zu unspezifisch für eine verlässliche Prüfung
++
++const compact = (s) =>
++  String(s || "").normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
++
++const QUOTE_MARKS = /[„“”"»«]/g;
++
++// Text zwischen dem ersten und letzten Anführungszeichen; ohne Anführungszeichen: alles vor dem Kurzbeleg.
++function extractQuote(zitat) {
++  const s = String(zitat || "");
++  const marks = [...s.matchAll(QUOTE_MARKS)].map((m) => m.index);
++  if (marks.length >= 2) return s.slice(marks[0] + 1, marks[marks.length - 1]);
++  return s.replace(/\([^()]*\)\s*\.?\s*$/, "");
++}
++
++// Auslassungen […] / ... / … und redaktionelle Einschübe [..] trennen das Zitat in prüfbare Teile.
++function segmentsOf(quote) {
++  return String(quote)
++    .split(/\[[^\]]*\]|…|\.{3}/)
++    .map(compact)
++    .filter((c) => c.length >= MIN_SEGMENT);
++}
++
++function pageBlocks(chunk) {
++  const parts = String(chunk).split(/\[Seite (\d+)\]/);
++  const blocks = [];
++  for (let i = 1; i < parts.length; i += 2) {
++    blocks.push({ page: Number(parts[i]), text: compact(parts[i + 1]) });
++  }
++  if (!blocks.length) blocks.push({ page: null, text: compact(chunk) });
++  return blocks;
++}
++
++function verifyEntries(entries, chunk) {
++  if (!Array.isArray(entries)) return entries;
++  const blocks = pageBlocks(chunk);
++  const full = blocks.map((b) => b.text).join("");
++
++  return entries.map((entry) => {
++    if (!entry || typeof entry !== "object") return entry;
++    const segs = segmentsOf(extractQuote(entry.direktes_zitat));
++    if (!segs.length) return { ...entry, zitat_status: "nicht_pruefbar", zitat_seite_pdf: null, seite_abweichend: false };
++
++    const found = segs.map((sg) => full.includes(sg));
++    const n = found.filter(Boolean).length;
++    const status = n === segs.length ? "ok" : n > 0 ? "teilweise" : "nicht_gefunden";
++
++    let seite = null;
++    if (n > 0) {
++      const first = segs[found.indexOf(true)];
++      const block = blocks.find((b) => b.text.includes(first));
++      seite = block ? block.page : null; // null, wenn das Zitat über eine Seitengrenze geht
++    }
++    const cited = String(entry.direktes_zitat || "").match(/S\.\s*(\d+)/);
++    const abweichend = seite != null && !!cited && Number(cited[1]) !== seite;
++
++    return { ...entry, zitat_status: status, zitat_seite_pdf: seite, seite_abweichend: abweichend };
++  });
++}
++
++module.exports = { verifyEntries, extractQuote, segmentsOf, compact };
+diff --git a/api/analyze.js b/api/analyze.js
+index ddbf02f..f7891d4 100644
+--- a/api/analyze.js
++++ b/api/analyze.js
+@@ -1,9 +1,77 @@
+ // Vercel Serverless Function (CommonJS, läuft ohne "type": "module")
++// Der Client schickt nur Rohdaten (kind: first | next | matrix). Die Prompts entstehen hier.
++const crypto = require("node:crypto");
++const { buildPromptFirst, buildPromptNext, buildPromptMatrix } = require("./_prompts");
++const { verifyEntries } = require("./_verify");
++const { checkRateLimit } = require("./_ratelimit");
++
+ const MODELS = {
+   fast: process.env.ANTHROPIC_MODEL_FAST || "claude-haiku-4-5-20251001",
+-  precise: process.env.ANTHROPIC_MODEL || "claude-sonnet-5",
++  precise: process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5",
+ };
+-const MAX_PROMPT_CHARS = 200000;
++
++const MAX_TOKENS = 8000;
++const MAX_EXPO = 40000;
++const MAX_CHUNK = 40000;
++const MAX_ITEMS_JSON = 150000;
++const MAX_ATTEMPTS = 4;
++const DEADLINE_MS = 50000; // vercel.json: maxDuration 60 s
++const RETRYABLE = new Set([429, 500, 502, 503, 529]);
++
++class HttpError extends Error {
++  constructor(status, message) { super(message); this.status = status; }
++}
++
++function str(v, max, name, required = true) {
++  if (v === undefined || v === null || v === "") {
++    if (required) throw new HttpError(400, `${name} fehlt`);
++    return "";
++  }
++  if (typeof v !== "string") throw new HttpError(400, `${name} muss Text sein`);
++  if (v.length > max) throw new HttpError(413, `${name} ist zu groß (max. ${max} Zeichen).`);
++  return v;
++}
++
++const list = (v, maxItems, maxLen) =>
++  Array.isArray(v) ? v.slice(0, maxItems).map((x) => String(x).slice(0, maxLen)) : [];
++
++// Baut den Prompt aus validierten Rohdaten. Gibt auch den Chunk zurück (für die Zitatprüfung).
++function buildRequest(body) {
++  switch (body.kind) {
++    case "first": {
++      const expo = str(body.expo, MAX_EXPO, "expo");
++      const chunk = str(body.chunk, MAX_CHUNK, "chunk");
++      return { kind: "first", chunk, prompt: buildPromptFirst(expo, chunk, body.multiPart === true) };
++    }
++    case "next": {
++      const expo = str(body.expo, MAX_EXPO, "expo", false);
++      const chunk = str(body.chunk, MAX_CHUNK, "chunk");
++      const leitfrage = str(body.leitfrage, 2000, "leitfrage", false);
++      const autor = str(body.autor, 200, "autor", false);
++      const jahr = str(body.jahr, 50, "jahr", false);
++      const gliederung = list(body.gliederung, 60, 200);
++      return { kind: "next", chunk, prompt: buildPromptNext(expo, chunk, leitfrage, autor, jahr, gliederung) };
++    }
++    case "matrix": {
++      if (!Array.isArray(body.items) || !body.items.length) throw new HttpError(400, "items fehlt");
++      if (body.items.length > 300) throw new HttpError(413, "Zu viele Belege (max. 300).");
++      const items = body.items.map((it) => ({
++        id: Number(it && it.id) || 0,
++        kapitel: String((it && it.kapitel) || "").slice(0, 200),
++        argument: String((it && it.argument) || "").slice(0, 500),
++        relevanz: String((it && it.relevanz) || "").slice(0, 500),
++        kurz: String((it && it.kurz) || "").slice(0, 300),
++      }));
++      if (JSON.stringify(items).length > MAX_ITEMS_JSON) throw new HttpError(413, "Belege sind zu groß.");
++      const outline = list(body.outline, 100, 300);
++      const leitfrage = str(body.leitfrage, 2000, "leitfrage", false) || "—";
++      const empirieDef = str(body.empirieDef, 600, "empirieDef", false);
++      return { kind: "matrix", chunk: "", prompt: buildPromptMatrix(items, outline, leitfrage, empirieDef) };
++    }
++    default:
++      throw new HttpError(400, "kind ungültig (erwartet: first, next oder matrix)");
++  }
++}
+ 
+ // Extrahiert das erste vollständige JSON-Objekt, auch wenn Text/Fences drumherum stehen.
+ function extractJson(raw) {
+@@ -14,7 +82,7 @@ function extractJson(raw) {
+   return JSON.parse(text.slice(start, end + 1));
+ }
+ 
+-async function callAnthropic(prompt, model) {
++async function callAnthropic(prompt, model, timeoutMs) {
+   const r = await fetch("https://api.anthropic.com/v1/messages", {
+     method: "POST",
+     headers: {
+@@ -22,50 +90,94 @@ async function callAnthropic(prompt, model) {
+       "x-api-key": process.env.ANTHROPIC_API_KEY,
+       "anthropic-version": "2023-06-01",
+     },
+-    body: JSON.stringify({
+-      model,
+-      max_tokens: 8000,
+-      messages: [{ role: "user", content: prompt }],
+-    }),
++    body: JSON.stringify({ model, max_tokens: MAX_TOKENS, messages: [{ role: "user", content: prompt }] }),
++    signal: AbortSignal.timeout(timeoutMs),
+   });
+   const data = await r.json().catch(() => ({}));
+   return { r, data };
+ }
+ 
++const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
++
++// Exponentieller Backoff mit Jitter; respektiert den retry-after-Header von Anthropic.
++function backoffMs(attempt, r) {
++  const header = r && r.headers && r.headers.get ? r.headers.get("retry-after") : null;
++  const ra = header === null || header === undefined || header === "" ? NaN : Number(header);
++  if (Number.isFinite(ra)) return Math.min(ra * 1000, 15000);
++  return Math.min(1000 * 2 ** attempt, 8000) + Math.random() * 400;
++}
++
++function codeMatches(given, expected) {
++  const a = crypto.createHash("sha256").update(String(given || "")).digest();
++  const b = crypto.createHash("sha256").update(String(expected)).digest();
++  return crypto.timingSafeEqual(a, b);
++}
++
+ module.exports = async (req, res) => {
++  res.setHeader("Cache-Control", "no-store");
+   if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
+ 
+   if (!process.env.ANTHROPIC_API_KEY) {
+     return res.status(500).json({ error: "Server nicht konfiguriert: ANTHROPIC_API_KEY fehlt in den Vercel-Umgebungsvariablen." });
+   }
+ 
++  // Optionaler Zugangscode (Umgebungsvariable ACCESS_CODE)
++  if (process.env.ACCESS_CODE && !codeMatches(req.headers && req.headers["x-access-code"], process.env.ACCESS_CODE)) {
++    return res.status(401).json({ error: "Zugangscode erforderlich oder falsch." });
++  }
++
++  const rl = await checkRateLimit(req);
++  res.setHeader("X-RateLimit-Limit", String(rl.limit));
++  res.setHeader("X-RateLimit-Remaining", String(rl.remaining));
++  if (!rl.ok) {
++    res.setHeader("Retry-After", String(rl.retryAfter));
++    return res.status(429).json({ error: `Zu viele Anfragen. Bitte in ca. ${Math.ceil(rl.retryAfter / 60)} Min. erneut versuchen.` });
++  }
++
+   let body = req.body;
+   if (typeof body === "string") { try { body = JSON.parse(body); } catch { body = {}; } }
+-  const { prompt, mode } = body || {};
+-  const model = MODELS[mode] || MODELS.fast;
+-  if (!prompt || typeof prompt !== "string") return res.status(400).json({ error: "prompt fehlt" });
+-  if (prompt.length > MAX_PROMPT_CHARS) return res.status(413).json({ error: "Anfrage zu groß." });
++  body = body && typeof body === "object" ? body : {};
++
++  let built;
++  try {
++    built = buildRequest(body);
++  } catch (e) {
++    if (e instanceof HttpError) return res.status(e.status).json({ error: e.message });
++    throw e;
++  }
+ 
++  const model = MODELS[body.mode] || MODELS.fast;
++  const started = Date.now();
+   let lastErr = "unbekannter Fehler";
+-  for (let attempt = 0; attempt < 2; attempt++) {
++
++  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
++    const remaining = DEADLINE_MS - (Date.now() - started);
++    if (remaining < 3000) { lastErr = `${lastErr} (Zeitbudget aufgebraucht)`; break; }
+     try {
+-      const { r, data } = await callAnthropic(prompt, model);
++      const { r, data } = await callAnthropic(built.prompt, model, remaining);
+       if (!r.ok) {
+-        lastErr = `Anthropic-API ${r.status}: ${data.error?.message || "Fehler"}`;
+-        // Nur bei Überlast/Rate-Limit erneut versuchen
+-        if ([429, 500, 529].includes(r.status)) { await new Promise(r => setTimeout(r, 1500)); continue; }
++        lastErr = `Anthropic-API ${r.status}: ${(data.error && data.error.message) || "Fehler"}`;
++        if (RETRYABLE.has(r.status) && attempt < MAX_ATTEMPTS - 1) { await sleep(backoffMs(attempt, r)); continue; }
+         return res.status(502).json({ error: lastErr });
+       }
+-      const text = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("");
++      const text = (data.content || []).filter((b) => b.type === "text").map((b) => b.text).join("");
++      if (data.stop_reason === "max_tokens") {
++        return res.status(502).json({ error: "Modell-Antwort wurde abgeschnitten (max_tokens). Bitte erneut versuchen." });
++      }
+       try {
+-        return res.status(200).json(extractJson(text));
++        const parsed = extractJson(text);
++        if (built.kind !== "matrix" && Array.isArray(parsed.entries)) {
++          parsed.entries = verifyEntries(parsed.entries, built.chunk);
++        }
++        return res.status(200).json(parsed);
+       } catch (parseErr) {
+-        lastErr = `Modell-Antwort nicht als JSON lesbar (${parseErr.message}${data.stop_reason === "max_tokens" ? ", Antwort abgeschnitten" : ""})`;
+-        console.error(lastErr, text.slice(0, 300));
++        lastErr = `Modell-Antwort nicht als JSON lesbar (${parseErr.message})`;
++        console.error(lastErr, `Länge: ${text.length}`); // bewusst ohne Textinhalt (Datenschutz)
+       }
+     } catch (e) {
+       lastErr = `Netzwerkfehler: ${e.message}`;
+-      console.error(e);
++      console.error(lastErr);
++      if (attempt < MAX_ATTEMPTS - 1) await sleep(backoffMs(attempt, null));
+     }
+   }
+   return res.status(502).json({ error: lastErr });
+diff --git a/app.js b/app.js
+index 4b13530..60e17a0 100644
+--- a/app.js
++++ b/app.js
+@@ -209,6 +209,22 @@ function applyFilter() {
+   resultsEl.querySelectorAll('.entry').forEach(a => { a.hidden = !!activeFilter && a.dataset.stelle !== activeFilter; });
+ }
+ 
++// Ergebnis der serverseitigen Zitatprüfung (steht der wörtliche Text wirklich im PDF-Text?)
++function zitatBadges(e) {
++  const out = [];
++  if (e.zitat_status === 'ok') {
++    out.push(`<span class="tag zitat-ok" title="Das direkte Zitat wurde wörtlich im Quelltext gefunden.">✓ Zitat im Text gefunden${e.zitat_seite_pdf ? ` (PDF-S. ${escapeHtml(e.zitat_seite_pdf)})` : ''}</span>`);
++  } else if (e.zitat_status === 'teilweise') {
++    out.push('<span class="tag zitat-warn" title="Nur Teile des Zitats stehen wörtlich im Quelltext. Bitte im Original prüfen.">⚠ Zitat nur teilweise im Text gefunden</span>');
++  } else if (e.zitat_status === 'nicht_gefunden') {
++    out.push('<span class="tag zitat-warn" title="Das Zitat steht nicht wörtlich im Quelltext (evtl. vom Modell verändert). Bitte im Original prüfen.">⚠ Zitat nicht im Text gefunden – bitte prüfen</span>');
++  }
++  if (e.seite_abweichend && e.zitat_seite_pdf) {
++    out.push(`<span class="tag zitat-warn">⚠ Seite weicht ab: im Text PDF-S. ${escapeHtml(e.zitat_seite_pdf)}</span>`);
++  }
++  return out.join('');
++}
++
+ function renderEntries(entries, multiSource) {
+   const idx = k => { const j = exposeOutline.findIndex(o => o.trim().toLowerCase() === k.toLowerCase()); return j === -1 ? 999 : j; };
+   const keys = [...new Set(entries.map(stelleOf))].sort((a, b) => idx(a) - idx(b));
+@@ -234,6 +250,7 @@ function renderEntries(entries, multiSource) {
+         <span class="num">#${n}</span>
+         ${multiSource ? `<span class="tag">${escapeHtml(e.quelle)}</span>` : ''}
+         ${e.expose_stelle ? `<span class="tag stelle-tag">→ ${escapeHtml(e.expose_stelle)}${e.einordnung ? ' · ' + escapeHtml(e.einordnung) : ''}</span>` : ''}
++        ${zitatBadges(e)}
+       </div>
+       <h2>${escapeHtml(e.kernargument)}</h2>
+       ${e.relevanz ? `<p class="relevanz">${escapeHtml(e.relevanz)}</p>` : ''}
+@@ -273,66 +290,33 @@ resultsEl.addEventListener('click', async (ev) => {
+   }
+ });
+ 
+-function buildPromptFirst(expo, chunk, multiPart) {
+-  return `Du bist ein wissenschaftlicher Schreibassistent nach den Kriterien des Schreibzentrums der Universität Frankfurt am Main. Du arbeitest mit Harvard-Zitierweise (Kurzbeleg im Text: Nachname Jahr: Seite).
+-
+-EXPOSÉ (enthält These/Forschungsfrage/Kapitelstruktur der Hausarbeit):
+-"""
+-${expo}
+-"""
+-
+-LITERATUR${multiPart ? ' (erster Abschnitt eines längeren Textes; Seiten sind mit "[Seite N]" markiert)' : ' (Seiten sind mit "[Seite N]" markiert)'}:
+-"""
+-${chunk}
+-"""
+-
+-Aufgabe:
+-1. Fasse die Leitfrage/These des Exposés in einem Satz zusammen (Feld "leitfrage"). Liste außerdem die Gliederungspunkte/Kapitel des Exposés in ihrer Reihenfolge (Feld "gliederung", kurze Bezeichnungen wie im Exposé, z.B. "2.1 Begriffsklärung"); wenn keine Gliederung erkennbar ist: ["These","Forschungsfrage"].
+-2. Versuche, Nachname des Autors/der Autorin und Erscheinungsjahr aus dem Literaturtext zu erkennen (Titelseite, Kopfzeile, Selbstverweis o.ä.). Wenn unsicher: Felder leer lassen und in "quellen_hinweis" kurz erklären, dass die Angaben manuell zu ergänzen sind.
+-3. Wähle NUR die Passagen aus diesem Abschnitt aus, die inhaltlich tatsächlich relevant für die Leitfrage des Exposés sind — ignoriere thematisch abseitige Passagen. Wenn nichts relevant ist, gib ein leeres "entries"-Array zurück. Maximal 4 Kernaussagen pro Abschnitt.
+-4. Erstelle für jede ausgewählte Kernaussage:
+-- kernargument: Kurzbezeichnung, wofür/für welches Kapitel der Hausarbeit relevant.
+-- expose_stelle: die Stelle im Exposé, an der dieser Beleg eingesetzt werden sollte — exakt eine Bezeichnung aus "gliederung" (bei fehlender Gliederung: "These" oder "Forschungsfrage").
+-
+-- einordnung: sehr kurz (max. 8 Wörter), wie der Beleg dort verwendet werden kann (z.B. "stützt die These", "Definition", "Gegenposition", "Beispiel").
+-
+-- relevanz: ein Satz, warum diese Aussage die These/Leitfrage des Exposés stützt oder für sie relevant ist.
+-- direktes_zitat: wortgenaue Wiedergabe in Anführungszeichen, am Ende im Harvard-Stil "(Nachname Jahr: S. X)" mit der Seitenzahl aus dem nächstgelegenen [Seite N]-Marker; falls Autor/Jahr unsicher, Platzhalter "([Autor] [Jahr]: S. X)" verwenden.
+-- indirekt_integrierend: eine sprachlich eigenständige Paraphrase (andere Satzstruktur, nicht nur Synonyme) mit Autor aktiv im Satz, z.B. "Nachname (Jahr) argumentiert, dass …". Verhindere Patchwriting konsequent.
+-- indirekt_nicht_integrierend: eine weitere, unabhängig formulierte Paraphrase mit Fokus auf dem Fakt, Quelle in Klammern am Satzende im Harvard-Stil, z.B. "… (vgl. Nachname Jahr: S. X)."
+-- zusammenfassung: ein kurzer Satz zum größeren Zusammenhang dieser Textpassage.
+-
+-Antworte AUSSCHLIESSLICH mit einem JSON-Objekt (keine Markdown-Codeblöcke, kein Fließtext davor oder danach) in dieser Form:
+-{"leitfrage":"...","erkannter_autor":"...","erkanntes_jahr":"...","quellen_hinweis":"...","gliederung":["..."],"entries":[{"kernargument":"...","expose_stelle":"...","einordnung":"...","relevanz":"...","direktes_zitat":"...","indirekt_integrierend":"...","indirekt_nicht_integrierend":"...","zusammenfassung":"..."}]}`;
+-}
+-
+-function buildPromptNext(expo, chunk, leitfrage, autor, jahr, gliederung) {
+-  const gl = Array.isArray(gliederung) && gliederung.length ? gliederung.join(' | ') : '(nicht erkannt) Exposé-Anfang: ' + String(expo).slice(0, 1500);
+-  return `Du setzt die Analyse eines längeren Literaturtextes fort (weiterer Abschnitt desselben Textes). Arbeite mit Harvard-Zitierweise.
+-
+-LEITFRAGE DES EXPOSÉS: ${leitfrage}
+-
+-GLIEDERUNG DES EXPOSÉS: ${gl}
+-BEKANNTE QUELLENANGABE: ${autor ? autor : '[Autor]'}, ${jahr ? jahr : '[Jahr]'}
+-
+-WEITERER LITERATURABSCHNITT (Seiten mit "[Seite N]" markiert):
+-"""
+-${chunk}
+-"""
+-
+-Wähle NUR Passagen aus diesem Abschnitt, die inhaltlich relevant für die obige Leitfrage sind — ignoriere thematisch abseitige Passagen. Wenn nichts relevant ist, gib ein leeres "entries"-Array zurück. Maximal 4 Kernaussagen pro Abschnitt. Erstelle für jede relevante Kernaussage dieselben Felder wie zuvor: kernargument, expose_stelle (exakt eine Bezeichnung aus der GLIEDERUNG), einordnung (max. 8 Wörter), relevanz, direktes_zitat (Harvard-Stil mit Seitenzahl aus [Seite N]), indirekt_integrierend (eigenständige Paraphrase, Autor aktiv im Satz), indirekt_nicht_integrierend (eigenständige Paraphrase, Quelle in Klammern am Satzende), zusammenfassung. Kein Patchwriting — echte, eigenständige Umformulierung.
+-
+-Antworte AUSSCHLIESSLICH mit einem JSON-Objekt: {"entries":[{"kernargument":"...","expose_stelle":"...","einordnung":"...","relevanz":"...","direktes_zitat":"...","indirekt_integrierend":"...","indirekt_nicht_integrierend":"...","zusammenfassung":"..."}]}`;
+-}
+-
+ // ---------- Aufruf der eigenen Server-API statt window.claude ----------
+ 
+-async function callAnalyze(prompt, mode) {
+-  const res = await fetch('/api/analyze', {
++const ACCESS_KEY = 'zw_access_code';
++
++function sendAnalyze(payload) {
++  const headers = { 'Content-Type': 'application/json' };
++  const code = sessionStorage.getItem(ACCESS_KEY);
++  if (code) headers['x-access-code'] = code;
++  return fetch('/api/analyze', {
+     method: 'POST',
+-    headers: { 'Content-Type': 'application/json' },
+-    body: JSON.stringify({ prompt, mode: mode || document.getElementById('mode').value }),
++    headers,
++    body: JSON.stringify({ mode: document.getElementById('mode').value, ...payload }),
+   });
++}
++
++// Der Server baut die Prompts selbst; das Frontend schickt nur Rohdaten (kind + Texte).
++async function callAnalyze(payload) {
++  const usedCode = sessionStorage.getItem(ACCESS_KEY) || '';
++  let res = await sendAnalyze(payload);
++  if (res.status === 401) {
++    // Zugangscode fehlt oder ist falsch: einmal nachfragen (parallele Aufrufe fragen nicht doppelt)
++    if ((sessionStorage.getItem(ACCESS_KEY) || '') === usedCode) {
++      const entered = window.prompt('Zugangscode für diese Anwendung:');
++      if (entered) sessionStorage.setItem(ACCESS_KEY, entered.trim());
++    }
++    res = await sendAnalyze(payload);
++  }
+   const body = await res.json().catch(() => ({}));
+   if (!res.ok) {
+     throw new Error(body.error || `API-Fehler (${res.status})`);
+@@ -395,7 +379,7 @@ async function processSource(expo, sourceText, sourceLabel, onChunkDone, onParti
+   };
+ 
+   try {
+-    const data = await callAnalyze(buildPromptFirst(expo, chunks[0], chunks.length > 1));
++    const data = await callAnalyze({ kind: 'first', expo, chunk: chunks[0], multiPart: chunks.length > 1 });
+     brief = data;
+     handle(0, data);
+   } catch (e) { fail(0, e); }
+@@ -405,10 +389,15 @@ async function processSource(expo, sourceText, sourceLabel, onChunkDone, onParti
+   await runPool(rest, MAX_PARALLEL, async (i) => {
+     if (skip(chunks[i])) { skipped++; onChunkDone(); return; }
+     try {
+-      const data = await callAnalyze(buildPromptNext(
+-        expo, chunks[i],
+-        brief?.leitfrage || expo.slice(0, 600),
+-        brief?.erkannter_autor, brief?.erkanntes_jahr, brief?.gliederung));
++      const data = await callAnalyze({
++        kind: 'next',
++        expo: expo.slice(0, 1500), // nur als Ersatz, falls keine Gliederung erkannt wurde
++        chunk: chunks[i],
++        leitfrage: brief?.leitfrage || expo.slice(0, 600),
++        autor: brief?.erkannter_autor,
++        jahr: brief?.erkanntes_jahr,
++        gliederung: brief?.gliederung,
++      });
+       handle(i, data);
+     } catch (e) { fail(i, e); }
+     onChunkDone();
+diff --git a/index.html b/index.html
+index 3e46ffe..4b59c96 100644
+--- a/index.html
++++ b/index.html
+@@ -82,6 +82,5 @@
+   <span class="brand brand-sm">saena</span>
+   <span>Ergebnisse vor Verwendung stets mit der Originalquelle abgleichen.</span>
+ </footer>
+-<script src="js/pdf-viewer.js"></script>
+ </body>
+ </html>
+diff --git a/matrix-addon.js b/matrix-addon.js
+deleted file mode 100644
+index 7f1116a..0000000
+--- a/matrix-addon.js
++++ /dev/null
+@@ -1,176 +0,0 @@
+-(function () {
+-  // Anpassen, falls sich das Thema der Hausarbeit ändert:
+-  const EMPIRIE_DEF = 'einen konkreten empirischen Vorgang, ein Ereignis, eine Entwicklung oder einen Fall aus dem türkisch-kurdischen Friedensprozess';
+-
+-  const box = document.getElementById('matrixBox');
+-  const runEl = document.getElementById('run');
+-  let lastEntries = [];
+-  let lastBriefs = [];
+-  let busy = false;
+-
+-  // Ergebnisse der bestehenden Analyse mitschneiden
+-  const _renderEntries = renderEntries;
+-  renderEntries = function (entries) { lastEntries = entries || []; ensureButton(); return _renderEntries.apply(this, arguments); };
+-  const _renderBrief = renderBrief;
+-  renderBrief = function (briefs) { lastBriefs = briefs || []; return _renderBrief.apply(this, arguments); };
+-  runEl.addEventListener('click', () => { lastEntries = []; lastBriefs = []; box.innerHTML = ''; });
+-
+-  const HEAD = ['Hausarbeitskapitel', 'Argument', 'Quelle', 'Seite', 'Direktzitat vorhanden?', 'Paraphrase vorhanden?', 'Empirischer Beleg vorhanden?', 'Status'];
+-  const ST = { bereit: '🟢 Bereit', ausarbeiten: '🟡 Ausarbeiten', offen: '🔴 Offen' };
+-  const yn = b => (b ? '✅' : '❌');
+-  const has = s => { s = String(s || '').trim(); return s.length > 3 && !/^(—|–|-+|n\/a|kein(e|en)?\s+(zitat|paraphrase|direkt))/i.test(s); };
+-  const PAGE_RE = /S\.\s*(\d+(?:\s*[–-]\s*\d+)?)/;
+-
+-  function ensureButton() {
+-    if (box.firstChild) return;
+-    box.innerHTML = '<div style="margin:1.5rem 0 .75rem;display:flex;gap:.75rem;align-items:center;flex-wrap:wrap">' +
+-      '<button type="button" class="primary" id="matrixBtn">Schreibmatrix erstellen</button>' +
+-      '<span class="status" id="matrixStatus"></span></div><div id="matrixOut"></div>';
+-    box.querySelector('#matrixBtn').addEventListener('click', generate);
+-  }
+-  const setStatus = t => { const s = box.querySelector('#matrixStatus'); if (s) s.textContent = t; };
+-
+-  function getOutline(entries) {
+-    const o = [...new Set((Array.isArray(exposeOutline) ? exposeOutline : []).map(s => String(s).trim()).filter(Boolean))];
+-    return o.length ? o : [...new Set(entries.map(e => stelleOf(e)))];
+-  }
+-  function canon(k, outline) {
+-    const i = outline.findIndex(o => o.toLowerCase() === String(k || '').trim().toLowerCase());
+-    return i === -1 ? { name: String(k || 'Ohne Zuordnung').trim(), idx: 999 } : { name: outline[i], idx: i };
+-  }
+-  function quelleOf(e) {
+-    const b = lastBriefs.find(x => x && x.sourceLabel === e.quelle);
+-    if (b && b.erkannter_autor) return { text: b.erkannter_autor + (b.erkanntes_jahr ? ' (' + b.erkanntes_jahr + ')' : ''), ok: !!b.erkanntes_jahr };
+-    return { text: e.quelle || '', ok: false };
+-  }
+-  function pageAny(e) {
+-    const p = pageOf(e);
+-    if (p) return p;
+-    for (const f of [e.indirekt_nicht_integrierend, e.indirekt_integrierend]) {
+-      const m = String(f || '').match(PAGE_RE);
+-      if (m) return m[1];
+-    }
+-    return '';
+-  }
+-
+-  function buildPrompt(items, outline, leitfrage) {
+-    return `Du hilfst bei einer Hausarbeit. Grundlage ist ausschließlich die folgende Zitat-Werkstatt (Belege aus der Literatur).
+-
+-FORSCHUNGSFRAGE: ${leitfrage}
+-
+-KAPITEL (feste Gliederung, nicht verändern):
+-${outline.map(k => '- ' + k).join('\n')}
+-
+-BELEGE (JSON):
+-${JSON.stringify(items)}
+-
+-AUFGABE: Fasse die Belege zu Zeilen einer Schreibmatrix zusammen.
+-- kapitel: exakt eine Bezeichnung aus der Kapitelliste (die des Belegs; bei zusammengeführten Belegen dieselbe).
+-- argument: zentrales Argument, kurz und präzise (max. 25 Wörter), so formuliert, dass es direkt Grundlage für einen Absatz sein kann.
+-- ids: Nummern der Belege, die diese Zeile stützen. Führe nur Belege zusammen, die im selben Kapitel dasselbe Argument stützen. Jeder Beleg gehört genau einer Zeile an.
+-- empirisch: true nur, wenn der Beleg ${EMPIRIE_DEF} belegt; false bei rein theoretischen/konzeptionellen Aussagen.
+-- Nutze nur die Belege oben, erfinde nichts. Für die Forschungsfrage relevanteste Belege zuerst.
+-
+-Antworte ausschließlich mit JSON: {"zeilen":[{"kapitel":"...","argument":"...","ids":[1],"empirisch":false}]}`;
+-  }
+-
+-  function buildRows(entries, outline, zeilen) {
+-    const used = new Set(); const raw = [];
+-    (Array.isArray(zeilen) ? zeilen : []).forEach(z => {
+-      const ids = [...new Set((Array.isArray(z && z.ids) ? z.ids : []).map(Number))]
+-        .filter(n => Number.isInteger(n) && n >= 1 && n <= entries.length && !used.has(n));
+-      if (!ids.length) return;
+-      ids.forEach(n => used.add(n));
+-      raw.push({ kapitel: z.kapitel || stelleOf(entries[ids[0] - 1]), argument: String(z.argument || entries[ids[0] - 1].kernargument || '').trim(), ids, emp: z.empirisch === true });
+-    });
+-    entries.forEach((e, i) => { if (!used.has(i + 1)) raw.push({ kapitel: stelleOf(e), argument: String(e.kernargument || '').trim(), ids: [i + 1], emp: false }); });
+-
+-    const rows = raw.map(r => {
+-      const es = r.ids.map(n => entries[n - 1]);
+-      const c = canon(r.kapitel, outline);
+-      const qs = es.map(quelleOf).filter(q => q.text);
+-      const quelle = qs.length ? [...new Set(qs.map(q => q.text))].join('; ') : '—';
+-      const seiten = [...new Set(es.map(pageAny).filter(Boolean))];
+-      const seite = seiten.length ? seiten.join(', ') : '—';
+-      const direkt = es.some(e => has(e.direktes_zitat));
+-      const para = es.some(e => has(e.indirekt_integrierend) || has(e.indirekt_nicht_integrierend));
+-      const fehlt = [];
+-      if (!qs.length || qs.some(q => !q.ok)) fehlt.push('Autor/Jahr');
+-      if (seite === '—') fehlt.push('Seitenzahl');
+-      if (!direkt && !para) fehlt.push('Zitatform');
+-      if (!r.argument) fehlt.push('Argument');
+-      return { kapitel: c.name, idx: c.idx, argument: r.argument, quelle, seite, direkt, para, emp: r.emp, status: fehlt.length ? 'ausarbeiten' : 'bereit', fehlt };
+-    });
+-    outline.forEach((k, i) => {
+-      if (!rows.some(r => r.idx === i)) rows.push({ kapitel: k, idx: i, argument: '— (kein ausreichender Beleg in der Zitat-Werkstatt)', quelle: '—', seite: '—', direkt: false, para: false, emp: false, status: 'offen', fehlt: [] });
+-    });
+-    rows.sort((a, b) => a.idx - b.idx);
+-    return rows;
+-  }
+-
+-  function priorities(rows) {
+-    const chapters = [...new Set(rows.map(r => r.kapitel))];
+-    const of = k => rows.filter(r => r.kapitel === k);
+-    const lines = [];
+-    const offen = chapters.filter(k => of(k).every(r => r.status === 'offen'));
+-    if (offen.length) lines.push('🔴 Kein Beleg vorhanden: ' + offen.join('; '));
+-    const aus = chapters.map(k => {
+-      const rs = of(k).filter(r => r.status === 'ausarbeiten');
+-      return rs.length ? `${k} (${rs.length} von ${of(k).length} Belegen; fehlt: ${[...new Set(rs.flatMap(r => r.fehlt))].join(', ')})` : null;
+-    }).filter(Boolean);
+-    if (aus.length) lines.push('🟡 Ausarbeiten: ' + aus.join('; '));
+-    const duenn = chapters.filter(k => of(k).filter(r => r.status !== 'offen').length === 1);
+-    if (duenn.length) lines.push('Nur ein Beleg: ' + duenn.join('; '));
+-    const ohneEmp = chapters.filter(k => { const rs = of(k).filter(r => r.status !== 'offen'); return rs.length && !rs.some(r => r.emp); });
+-    if (ohneEmp.length) lines.push('Noch ohne empirischen Beleg: ' + ohneEmp.join('; '));
+-    if (!lines.length) lines.push('🟢 Alle Kapitel sind belegt und bereit.');
+-    return lines;
+-  }
+-
+-  const cellsOf = r => [r.kapitel, r.argument, r.quelle, r.seite, yn(r.direkt), yn(r.para), yn(r.emp), ST[r.status]];
+-  const TD = 'style="border:1px solid #999;padding:6px 8px;vertical-align:top;text-align:left"';
+-  function tableHtml(rows) {
+-    return '<table style="border-collapse:collapse;width:100%;font-size:.9em"><thead><tr>' +
+-      HEAD.map(h => `<th ${TD}>${escapeHtml(h)}</th>`).join('') + '</tr></thead><tbody>' +
+-      rows.map(r => '<tr>' + cellsOf(r).map(c => `<td ${TD}>${escapeHtml(String(c))}</td>`).join('') + '</tr>').join('') +
+-      '</tbody></table>';
+-  }
+-
+-  function render(rows) {
+-    const prio = priorities(rows);
+-    const prioHtml = '<h3>Arbeitsprioritäten</h3><ul>' + prio.map(l => `<li>${escapeHtml(l)}</li>`).join('') + '</ul>';
+-    const html = tableHtml(rows) + prioHtml;
+-    const clean = s => String(s).replace(/[\t\r\n]+/g, ' ');
+-    const text = [HEAD.join('\t'), ...rows.map(r => cellsOf(r).map(clean).join('\t'))].join('\n') + '\n\nArbeitsprioritäten\n' + prio.map(l => '- ' + l).join('\n');
+-    const out = box.querySelector('#matrixOut');
+-    out.innerHTML = `<div style="overflow-x:auto">${html}</div><div style="margin-top:.75rem"><button type="button" class="file-btn" id="matrixCopy">Für Google Docs kopieren</button></div>`;
+-    const cb = out.querySelector('#matrixCopy');
+-    cb.addEventListener('click', async () => {
+-      try {
+-        if (window.ClipboardItem) await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([text], { type: 'text/plain' }) })]);
+-        else await navigator.clipboard.writeText(text);
+-        cb.textContent = 'Kopiert ✓';
+-      } catch (e) { cb.textContent = 'Kopieren fehlgeschlagen'; }
+-      setTimeout(() => { cb.textContent = 'Für Google Docs kopieren'; }, 2000);
+-    });
+-  }
+-
+-  async function generate() {
+-    const btn = box.querySelector('#matrixBtn');
+-    if (runEl.disabled) { setStatus('Die Analyse läuft noch – bitte kurz warten.'); return; }
+-    if (busy || !lastEntries.length) return;
+-    busy = true; btn.disabled = true; setStatus('Erstelle Schreibmatrix …');
+-    try {
+-      const entries = lastEntries.slice();
+-      const outline = getOutline(entries);
+-      const leitfrage = (lastBriefs.find(b => b && b.leitfrage) || {}).leitfrage || '—';
+-      const items = entries.map((e, i) => ({ id: i + 1, kapitel: stelleOf(e), argument: e.kernargument || '', relevanz: e.relevanz || '', kurz: String(e.zusammenfassung || '').slice(0, 300) }));
+-      const data = await callAnalyze(buildPrompt(items, outline, leitfrage));
+-      render(buildRows(entries, outline, data && data.zeilen));
+-      setStatus('');
+-    } catch (err) {
+-      console.error(err);
+-      setStatus('Schreibmatrix fehlgeschlagen: ' + (err.message || 'unbekannter Fehler'));
+-    } finally { busy = false; btn.disabled = false; }
+-  }
+-})();
+\ No newline at end of file
+diff --git a/matrix.js b/matrix.js
+index 5c092a0..7ae1f55 100644
+--- a/matrix.js
++++ b/matrix.js
+@@ -53,27 +53,6 @@
+     return '';
+   }
+ 
+-  function buildPrompt(items, outline, leitfrage) {
+-    return `Du hilfst bei einer Hausarbeit. Grundlage ist ausschließlich die folgende Zitat-Werkstatt (Belege aus der Literatur).
+-
+-FORSCHUNGSFRAGE: ${leitfrage}
+-
+-KAPITEL (feste Gliederung, nicht verändern):
+-${outline.map(k => '- ' + k).join('\n')}
+-
+-BELEGE (JSON):
+-${JSON.stringify(items)}
+-
+-AUFGABE: Fasse die Belege zu Zeilen einer Schreibmatrix zusammen.
+-- kapitel: exakt eine Bezeichnung aus der Kapitelliste (die des Belegs; bei zusammengeführten Belegen dieselbe).
+-- argument: zentrales Argument, kurz und präzise (max. 25 Wörter), so formuliert, dass es direkt Grundlage für einen Absatz sein kann.
+-- ids: Nummern der Belege, die diese Zeile stützen. Führe nur Belege zusammen, die im selben Kapitel dasselbe Argument stützen. Jeder Beleg gehört genau einer Zeile an.
+-- empirisch: true nur, wenn der Beleg ${EMPIRIE_DEF} belegt; false bei rein theoretischen/konzeptionellen Aussagen.
+-- Nutze nur die Belege oben, erfinde nichts. Für die Forschungsfrage relevanteste Belege zuerst.
+-
+-Antworte ausschließlich mit JSON: {"zeilen":[{"kapitel":"...","argument":"...","ids":[1],"empirisch":false}]}`;
+-  }
+-
+   function buildRows(entries, outline, zeilen) {
+     const used = new Set(); const raw = [];
+     (Array.isArray(zeilen) ? zeilen : []).forEach(z => {
+@@ -165,7 +144,7 @@ Antworte ausschließlich mit JSON: {"zeilen":[{"kapitel":"...","argument":"...",
+       const outline = getOutline(entries);
+       const leitfrage = (lastBriefs.find(b => b && b.leitfrage) || {}).leitfrage || '—';
+       const items = entries.map((e, i) => ({ id: i + 1, kapitel: stelleOf(e), argument: e.kernargument || '', relevanz: e.relevanz || '', kurz: String(e.zusammenfassung || '').slice(0, 300) }));
+-      const data = await callAnalyze(buildPrompt(items, outline, leitfrage), 'fast');
++      const data = await callAnalyze({ kind: 'matrix', mode: 'fast', items, outline, leitfrage, empirieDef: EMPIRIE_DEF });
+       render(buildRows(entries, outline, data && data.zeilen));
+       setStatus('');
+     } catch (err) {
+diff --git a/node_modules/.package-lock.json b/node_modules/.package-lock.json
+deleted file mode 100644
+index a7a736e..0000000
+--- a/node_modules/.package-lock.json
++++ /dev/null
+@@ -1,7 +0,0 @@
+-{
+-  "name": "zitat-werkstatt",
+-  "version": "1.1.0",
+-  "lockfileVersion": 3,
+-  "requires": true,
+-  "packages": {}
+-}
+diff --git a/package.json b/package.json
+index f852a1c..7a9f204 100644
+--- a/package.json
++++ b/package.json
+@@ -3,5 +3,10 @@
+   "version": "1.2.0",
+   "private": true,
+   "description": "Browser-Tool zur Extraktion zitatfertiger Kernaussagen aus wissenschaftlicher Literatur (Harvard-Stil).",
+-  "engines": { "node": ">=18" }
++  "engines": {
++    "node": ">=18"
++  },
++  "scripts": {
++    "test": "node --test"
++  }
+ }
+diff --git a/styles.css b/styles.css
+index c6a35d9..fbbe5d8 100644
+--- a/styles.css
++++ b/styles.css
+@@ -305,3 +305,7 @@ button.primary:disabled { opacity: 0.55; cursor: default; transform: none; }
+ #matrixOut tbody tr:last-child > * { border-bottom: none !important; }
+ 
+ .site-foot { margin-top: 4rem; padding-top: 1.25rem; border-top: 1px solid var(--line); font-size: 0.78rem; color: var(--ink-soft); }
++
++/* Ergebnis der Zitatprüfung */
++.tag.zitat-ok { color: var(--ok); border-color: var(--ok); background: var(--ok-tint); }
++.tag.zitat-warn { color: var(--oxblood); border-color: var(--oxblood-soft); background: var(--oxblood-tint); font-weight: 600; }
+diff --git a/test/api.test.js b/test/api.test.js
+new file mode 100644
+index 0000000..e7a0199
+--- /dev/null
++++ b/test/api.test.js
+@@ -0,0 +1,135 @@
++const test = require("node:test");
++const assert = require("node:assert/strict");
++
++process.env.ANTHROPIC_API_KEY = "test-key";
++const handler = require("../api/analyze.js");
++const { verifyEntries } = require("../api/_verify.js");
++
++const CHUNK =
++  "[Seite 4]\nDie Zivilgesellschaft ist ein zentraler Akteur des Frie-\ndensprozesses in der Türkei.\n" +
++  "[Seite 5]\nEine andere Passage mit ganz anderem Inhalt über Verfassungsfragen.";
++
++function mockRes() {
++  return {
++    statusCode: 200, headers: {}, body: null,
++    setHeader(k, v) { this.headers[k] = v; },
++    status(c) { this.statusCode = c; return this; },
++    json(b) { this.body = b; return this; },
++  };
++}
++const mockReq = (body, ip, headers = {}) => ({ method: "POST", headers: { "x-forwarded-for": ip, ...headers }, body });
++const modelOk = (obj) => ({
++  ok: true, status: 200, headers: { get: () => null },
++  json: async () => ({ content: [{ type: "text", text: JSON.stringify(obj) }], stop_reason: "end_turn" }),
++});
++const firstBody = { kind: "first", expo: "Exposé zur Zivilgesellschaft", chunk: CHUNK };
++
++test("altes Format mit freiem prompt wird abgelehnt", async () => {
++  global.fetch = async () => { throw new Error("darf nicht aufgerufen werden"); };
++  const res = mockRes();
++  await handler(mockReq({ prompt: "Schreibe mir ein Gedicht" }, "10.0.0.1"), res);
++  assert.equal(res.statusCode, 400);
++});
++
++test("zu große Eingaben werden mit 413 abgelehnt", async () => {
++  global.fetch = async () => { throw new Error("darf nicht aufgerufen werden"); };
++  const res = mockRes();
++  await handler(mockReq({ ...firstBody, chunk: "x".repeat(40001) }, "10.0.0.2"), res);
++  assert.equal(res.statusCode, 413);
++});
++
++test("Prompt entsteht serverseitig, max_tokens und Modell sind fest", async () => {
++  let sent;
++  global.fetch = async (url, opts) => { sent = JSON.parse(opts.body); return modelOk({ leitfrage: "LF", entries: [] }); };
++  const res = mockRes();
++  await handler(mockReq({ ...firstBody, mode: "fast", max_tokens: 99999, model: "teuer" }, "10.0.0.3"), res);
++  assert.equal(res.statusCode, 200);
++  assert.equal(sent.max_tokens, 8000);
++  assert.equal(sent.model, "claude-haiku-4-5-20251001");
++  assert.ok(sent.messages[0].content.includes("Die Zivilgesellschaft ist ein zentraler Akteur"));
++});
++
++test("Zitatprüfung: echtes Zitat ok (auch mit Silbentrennung), verändertes Zitat markiert", async () => {
++  global.fetch = async () => modelOk({
++    leitfrage: "LF",
++    entries: [
++      { direktes_zitat: "„Die Zivilgesellschaft ist ein zentraler Akteur des Friedensprozesses“ (Muster 2020: S. 4)" },
++      { direktes_zitat: "„Die Zivilgesellschaft ist der alleinige Akteur des Friedensprozesses“ (Muster 2020: S. 4)" },
++    ],
++  });
++  const res = mockRes();
++  await handler(mockReq(firstBody, "10.0.0.4"), res);
++  const [a, b] = res.body.entries;
++  assert.equal(a.zitat_status, "ok");
++  assert.equal(a.zitat_seite_pdf, 4);
++  assert.equal(a.seite_abweichend, false);
++  assert.equal(b.zitat_status, "nicht_gefunden");
++});
++
++test("Zitatprüfung: Auslassung, falsche Seite, zu kurz", () => {
++  const [ell, page, tiny] = verifyEntries([
++    { direktes_zitat: "„Die Zivilgesellschaft ist ein zentraler Akteur […] in der Türkei“ (M 2020: S. 4)" },
++    { direktes_zitat: "„Die Zivilgesellschaft ist ein zentraler Akteur des Friedensprozesses“ (M 2020: S. 5)" },
++    { direktes_zitat: "„Ja“ (M 2020: S. 4)" },
++  ], CHUNK);
++  assert.equal(ell.zitat_status, "ok");
++  assert.equal(page.zitat_status, "ok");
++  assert.equal(page.zitat_seite_pdf, 4);
++  assert.equal(page.seite_abweichend, true);
++  assert.equal(tiny.zitat_status, "nicht_pruefbar");
++});
++
++test("Zugangscode wird erzwungen, wenn ACCESS_CODE gesetzt ist", async () => {
++  process.env.ACCESS_CODE = "geheim";
++  global.fetch = async () => modelOk({ leitfrage: "LF", entries: [] });
++  try {
++    const noCode = mockRes();
++    await handler(mockReq(firstBody, "10.0.0.5"), noCode);
++    assert.equal(noCode.statusCode, 401);
++    const wrong = mockRes();
++    await handler(mockReq(firstBody, "10.0.0.5", { "x-access-code": "falsch" }), wrong);
++    assert.equal(wrong.statusCode, 401);
++    const right = mockRes();
++    await handler(mockReq(firstBody, "10.0.0.5", { "x-access-code": "geheim" }), right);
++    assert.equal(right.statusCode, 200);
++  } finally { delete process.env.ACCESS_CODE; }
++});
++
++test("Rate-Limit greift pro IP", async () => {
++  process.env.RATE_LIMIT_MAX = "2";
++  global.fetch = async () => modelOk({ leitfrage: "LF", entries: [] });
++  try {
++    const codes = [];
++    for (let i = 0; i < 3; i++) { const r = mockRes(); await handler(mockReq(firstBody, "10.0.0.6"), r); codes.push(r.statusCode); }
++    assert.deepEqual(codes, [200, 200, 429]);
++    const other = mockRes();
++    await handler(mockReq(firstBody, "10.0.0.7"), other);
++    assert.equal(other.statusCode, 200);
++  } finally { delete process.env.RATE_LIMIT_MAX; }
++});
++
++test("429 von Anthropic wird mit retry-after wiederholt", async () => {
++  let calls = 0;
++  global.fetch = async () => {
++    calls++;
++    if (calls === 1) return { ok: false, status: 429, headers: { get: () => "0" }, json: async () => ({ error: { message: "rate" } }) };
++    return modelOk({ leitfrage: "LF", entries: [] });
++  };
++  const res = mockRes();
++  await handler(mockReq(firstBody, "10.0.0.8"), res);
++  assert.equal(res.statusCode, 200);
++  assert.equal(calls, 2);
++});
++
++test("Matrix: Belege werden bereinigt, Prompt serverseitig gebaut", async () => {
++  let sent;
++  global.fetch = async (url, opts) => { sent = JSON.parse(opts.body); return modelOk({ zeilen: [] }); };
++  const res = mockRes();
++  await handler(mockReq({
++    kind: "matrix", mode: "fast", leitfrage: "LF", outline: ["1 Einleitung"], empirieDef: "einen Fall",
++    items: [{ id: 1, kapitel: "1 Einleitung", argument: "A", relevanz: "R", kurz: "K", boese: "ignoriert" }],
++  }, "10.0.0.9"), res);
++  assert.equal(res.statusCode, 200);
++  assert.ok(sent.messages[0].content.includes("einen Fall"));
++  assert.ok(!sent.messages[0].content.includes("ignoriert"));
++});
