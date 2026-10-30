@@ -176,6 +176,14 @@ function pageOf(e) {
   return m ? m[1] : '';
 }
 
+function quoteMarkup(e, key, isQuote, fid) {
+  const text = escapeHtml(e[key]);
+  if (!isQuote || !e.sourcePdfUrl) return text;
+  const page = pageOf(e);
+  const pageParam = page ? `#page=${page.split(/[–-]/)[0].trim()}` : '';
+  return `<a class="quote-link" href="${escapeHtml(e.sourcePdfUrl)}${pageParam}" target="_blank" rel="noopener" aria-label="Zitat im PDF öffnen${page ? `, Seite ${escapeHtml(page)}` : ''}">${text}<span class="quote-open" aria-hidden="true">↗</span></a>`;
+}
+
 // Übersicht: welcher Beleg passt an welche Stelle des Exposés
 function buildMapping(entries) {
   if (!entries.some(e => e.expose_stelle)) return '';
@@ -225,7 +233,7 @@ function renderEntries(entries, multiSource) {
     const panels = TABS.map(([id, , key, isQ]) => {
       const fid = `f${n}${id}`;
       return `<div class="panel" data-panel="${id}" role="tabpanel"${id === active ? '' : ' hidden'}>
-        <p class="field-text${isQ ? ' quote' : ''}" id="${fid}">${escapeHtml(e[key])}</p>
+        <p class="field-text${isQ ? ' quote' : ''}" id="${fid}">${quoteMarkup(e, key, isQ, fid)}</p>
         <div class="field-foot"><button type="button" class="copy-btn" data-target="${fid}">Kopieren</button></div>
       </div>`;
     }).join('');
@@ -375,7 +383,7 @@ async function runPool(items, limit, worker) {
 
 // Verarbeitet eine Literaturquelle: Abschnitt 1 zuerst (liefert Leitfrage/Autor/Jahr),
 // alle weiteren Abschnitte danach parallel.
-async function processSource(expo, sourceText, sourceLabel, onChunkDone, onPartial) {
+async function processSource(expo, sourceText, sourceLabel, sourcePdfUrl, onChunkDone, onPartial) {
   const chunks = splitIntoChunks(sourceText, CHUNK_CHARS);
   const perChunk = new Array(chunks.length).fill(null);
   let brief = null;
@@ -385,7 +393,7 @@ async function processSource(expo, sourceText, sourceLabel, onChunkDone, onParti
   let lastError = '';
 
   const handle = (i, data) => {
-    perChunk[i] = (data.entries || []).map(e => ({ ...e, quelle: sourceLabel }));
+    perChunk[i] = (data.entries || []).map(e => ({ ...e, quelle: sourceLabel, sourcePdfUrl }));
     if (onPartial) onPartial(brief, perChunk.flat().filter(Boolean), chunks.length);
   };
   const fail = (i, err) => {
@@ -425,6 +433,7 @@ async function run() {
     .map((card, i) => ({
       label: card.querySelector('h3').textContent,
       text: card.querySelector('textarea').value.trim(),
+      sourcePdfUrl: card.querySelector('input[type=file]').files[0] ? URL.createObjectURL(card.querySelector('input[type=file]').files[0]) : '',
     }))
     .filter(s => s.text.length > 0);
 
@@ -464,7 +473,7 @@ let lastErr = '';
       if (entries.length) renderEntries(entries, sources.length > 1);
     };
     const results = await Promise.all(sources.map((src, s) =>
-      processSource(expo, src.text, src.label, onChunkDone, (brief, entries, chunkCount) => {
+      processSource(expo, src.text, src.label, src.sourcePdfUrl, onChunkDone, (brief, entries, chunkCount) => {
         partial[s] = { brief, entries, chunkCount };
         refresh();
       })));

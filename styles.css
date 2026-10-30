@@ -276,6 +276,9 @@ button.primary:disabled { opacity: 0.55; cursor: default; transform: none; }
 .field-text.quote {
   font-style: italic; position: relative; padding: 0.2rem 0 0.2rem 1.1rem; border-left: 3px solid var(--oxblood-tint);
 }
+.quote-link { color: inherit; text-decoration: none; text-decoration-thickness: 1px; text-underline-offset: 0.2em; }
+.quote-link:hover { text-decoration: underline; color: var(--oxblood); }
+.quote-open { display: inline-block; margin-left: 0.45rem; color: var(--oxblood); font-family: var(--sans); font-size: 0.82em; font-weight: 600; vertical-align: 0.08em; }
 .field-foot { display: flex; justify-content: flex-end; margin-top: 0.6rem; }
 .copy-btn {
   background: none; border: 1px solid var(--line); color: var(--ink-soft); font-family: inherit;
