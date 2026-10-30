@@ -145,6 +145,32 @@ a:focus-visible { outline: 2px solid var(--walnut-mid); outline-offset: 3px; bor
   .steps { flex-direction: row; gap: 3rem; }
 }
 
+/* ---------- Guide ---------- */
+.guide {
+  max-width: 1200px; margin: 0 auto; padding: 6rem 1.5rem;
+  display: grid; gap: 3rem;
+}
+.guide-intro { max-width: 32rem; }
+.guide-intro h2 {
+  margin: 0 0 1.25rem;
+  font-family: var(--serif); font-weight: 400;
+  font-size: clamp(1.9rem, 4vw, 2.75rem); line-height: 1.15; letter-spacing: -0.015em;
+}
+.guide-intro > p:last-child { margin: 0; color: var(--walnut-soft); font-size: 1.05rem; }
+.guide-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
+.guide-list li {
+  display: grid; grid-template-columns: 3.5rem 1fr; gap: 1rem;
+  border-top: 1px solid var(--line); padding: 1.35rem 0;
+}
+.guide-list li:last-child { border-bottom: 1px solid var(--line); }
+.guide-marker { font-family: var(--serif); font-style: italic; color: var(--ember); }
+.guide-list h3 { margin: 0 0 .35rem; font-family: var(--serif); font-weight: 600; font-size: 1.35rem; }
+.guide-list p { margin: 0; color: var(--walnut-soft); max-width: 38rem; }
+@media (min-width: 800px) {
+  .guide { grid-template-columns: minmax(220px, .8fr) minmax(0, 1.2fr); align-items: start; gap: 6rem; }
+  .guide-intro { position: sticky; top: 2rem; }
+}
+
 /* ---------- Legend ---------- */
 .legend {
   position: relative; overflow: hidden;
