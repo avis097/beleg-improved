@@ -3,7 +3,37 @@ const MODELS = {
   fast: process.env.ANTHROPIC_MODEL_FAST || "claude-haiku-4-5-20251001",
   precise: process.env.ANTHROPIC_MODEL || "claude-sonnet-5",
 };
-const MAX_PROMPT_CHARS = 200000;
+const MAX_PROMPT_CHARS = 120000;
+const WINDOW_MS = 60_000;
+const MAX_REQUESTS_PER_WINDOW = 8;
+const requestLog = new Map();
+
+function getClientKey(req) {
+  const forwarded = req.headers['x-forwarded-for'];
+  return String(forwarded || req.headers['x-real-ip'] || 'unknown').split(',')[0].trim().slice(0, 128) || 'unknown';
+}
+
+function allowRequest(req) {
+  const now = Date.now();
+  const key = getClientKey(req);
+  const recent = (requestLog.get(key) || []).filter(timestamp => now - timestamp < WINDOW_MS);
+  if (recent.length >= MAX_REQUESTS_PER_WINDOW) return false;
+  recent.push(now);
+  requestLog.set(key, recent);
+  if (requestLog.size > 1000) {
+    for (const [entryKey, timestamps] of requestLog) {
+      if (!timestamps.some(timestamp => now - timestamp < WINDOW_MS)) requestLog.delete(entryKey);
+    }
+  }
+  return true;
+}
+
+function sameOrigin(req) {
+  const origin = req.headers.origin;
+  if (!origin) return true;
+  const host = req.headers.host;
+  return host && new URL(origin).host === host;
+}
 
 // Extrahiert das erste vollständige JSON-Objekt, auch wenn Text/Fences drumherum stehen.
 function extractJson(raw) {
@@ -33,7 +63,11 @@ async function callAnthropic(prompt, model) {
 }
 
 module.exports = async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
   if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
+  if (!sameOrigin(req)) return res.status(403).json({ error: "Ungültige Anfragequelle." });
+  if (!allowRequest(req)) return res.status(429).json({ error: "Zu viele Anfragen. Bitte warten Sie eine Minute." });
 
   if (!process.env.ANTHROPIC_API_KEY) {
     return res.status(500).json({ error: "Server nicht konfiguriert: ANTHROPIC_API_KEY fehlt in den Vercel-Umgebungsvariablen." });

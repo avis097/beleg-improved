@@ -96,7 +96,15 @@ async function ocrPage(page, worker) {
   return (data.text || '').trim();
 }
 
+const MAX_PDF_BYTES = 25 * 1024 * 1024;
+
 async function extractPdf(file, statusEl) {
+  if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+    throw new Error('Bitte nur PDF-Dateien hochladen.');
+  }
+  if (file.size > MAX_PDF_BYTES) {
+    throw new Error('Die PDF darf höchstens 25 MB groß sein.');
+  }
   statusEl.textContent = 'Lese PDF …';
   const buf = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
